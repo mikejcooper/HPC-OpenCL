@@ -1,4 +1,4 @@
-Run on Mac: 
+Run on mac: 
 
 $ OCL_DEVICE=2 ./d2q9-bgk input_128x128.params obstacles_128x128.dat
 
