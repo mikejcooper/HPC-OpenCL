@@ -200,10 +200,22 @@ int main(int argc, char* argv[])
 
   for (int tt = 0; tt < params.maxIters; tt++)
   {
+     // Write obstacles to OpenCL buffer
+  err = clEnqueueWriteBuffer(
+    ocl.queue, ocl.cells, CL_TRUE, 0,
+    sizeof(cl_float) * params.nx * params.ny, cells, 0, NULL, NULL);
+  checkError(err, "writing obstacles data", __LINE__);
+
     timestep(params, cells, tmp_cells, obstacles, tt, av_vels, ocl);
     cl_mem temp = ocl.cells;
     ocl.cells = ocl.tmp_cells;
     ocl.tmp_cells = temp;
+// Read av_vels from device
+  err = clEnqueueReadBuffer(
+    ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
+    sizeof(cl_float) * params.nx * params.ny, tmp_cells, 0, NULL, NULL);
+  checkError(err, "reading tmp_cells data", __LINE__);
+
 
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
