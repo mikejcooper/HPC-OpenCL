@@ -269,7 +269,7 @@ int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl 
   size_t global[1] = {params.nx};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.accelerate_flow,
                                1, NULL, global, NULL, 0, NULL, NULL);
-  checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
+  // checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
 
   // // Wait for kernel to finish
   // err = clFinish(ocl.queue);
@@ -308,7 +308,7 @@ int rebound(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obsta
   size_t local[2]  = {params.nx, 1};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.rebound,
                                2, NULL, global, local, 0, NULL, NULL);
-  checkError(err, "enqueueing rebound kernel", __LINE__);
+  // checkError(err, "enqueueing rebound kernel", __LINE__);
 
   // // Wait for kernel to finish
   // err = clFinish(ocl.queue);
@@ -335,7 +335,7 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   size_t global[1] = {params.ny};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
                                1, NULL, global, NULL, 0, NULL, NULL);
-  checkError(err, "enqueueing reduce kernel", __LINE__);
+  // checkError(err, "enqueueing reduce kernel", __LINE__);
 
   // // Wait for kernel to finish
   // err = clFinish(ocl.queue);
