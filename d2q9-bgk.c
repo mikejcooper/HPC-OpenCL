@@ -214,6 +214,7 @@ int main(int argc, char* argv[])
 #endif
   }  
 
+  err = clFinish(ocl.queue);
   // Read av_vels from device
   err = clEnqueueReadBuffer(
     ocl.queue, ocl.av_vels, CL_TRUE, 0,
@@ -308,7 +309,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
   checkError(err, "setting prop_rbd_col arg 5", __LINE__); 
   err = clSetKernelArg(ocl.prop_rbd_col, 7, sizeof(cl_mem), &ocl.av_partial_sums);
   checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
-  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx, NULL);
+  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx * 1, NULL);
   checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
 
 
@@ -329,6 +330,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
 void reduce(const t_param params, int tt, t_ocl ocl)
 {
   cl_int err;
+  int work_group_size = params.ny / 1;
 
   // Set kernel arguments
   err = clSetKernelArg(ocl.reduce, 0, sizeof(cl_mem), &ocl.av_partial_sums);
@@ -339,14 +341,20 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   checkError(err, "setting reduce arg 2", __LINE__);
   err = clSetKernelArg(ocl.reduce, 3, sizeof(cl_int), &params.tot_cells);
   checkError(err, "setting reduce arg 2", __LINE__);
+  err = clSetKernelArg(ocl.reduce, 4, sizeof(cl_int), &work_group_size);
+  checkError(err, "setting reduce arg 2", __LINE__);
 
   // Enqueue kernel
-  size_t global[1] = {params.ny};
+  // size_t global[1] = {params.ny};
+  // err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
+  //                              1, NULL, global, NULL, 0, NULL, NULL);
+  // checkError(err, "enqueueing reduce kernel", __LINE__);
+  
+  size_t global[1] = {1};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
                                1, NULL, global, NULL, 0, NULL, NULL);
   checkError(err, "enqueueing reduce kernel", __LINE__);
-  // err = clFinish(ocl.queue);
-  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
+    // err = clFinish(ocl.queue);
 
 }
 

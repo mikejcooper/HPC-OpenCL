@@ -162,10 +162,10 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   // --------------Local REDUCTION -----------------
 
-  int num_wrk_items  = get_local_size(0);   // No. of items in work group (number of columns)              
-  int local_id       = get_local_id(0);     // ID of coloumn X in the work group             
-  int group_id       = get_group_id(1);     // ID of specific work group
-  
+  int num_wrk_items  = get_local_size(0) * get_local_size(1);   // # work-items in work-group 
+  int local_id       = get_local_id(0) * get_local_id(1) + get_local_id(0);     // ID of work-item within work-group          
+  int group_id       = get_group_id(1);     // ID of work-group
+
   av_local_sums[local_id] = tot_u;
   barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -177,17 +177,18 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
     av_partial_sums[group_id] = total;    
   }
 
+
 }
 
 kernel void reduce(global float* av_partial_sums,
-                   global float* av_vels, int tt, int tot_cells)
+                   global float* av_vels, int tt, int tot_cells, int work_groups)
 {
-  int global_size  = get_global_size(0);    // number of items the work group (number of columns)              
-  int global_id    = get_global_id(0);   // ID of specific coloumn in the work group 
+  // int global_size  = get_global_size(0);  // # work-items   == # work-groups           
+  int global_id    = get_global_id(0);   // ID of work-item
 
   if (global_id == 0){
     float total = 0.0f;
-    for (int i=0; i<global_size; i++) {        
+    for (int i = 0; i < work_groups; i++) {        
       total += av_partial_sums[i];             
     }                                     
     av_vels[tt] = total/tot_cells;    
