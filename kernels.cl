@@ -15,7 +15,7 @@ kernel void accelerate_flow(global t_speed* cells,
 
  /* compute weighting factors */
   float w2 = density * accel / 36.0f;
-  float w1 = 4 * w2;
+  float w1 = 4.0f * w2;
 
 
   /* modify the 2nd row of the grid */
@@ -45,7 +45,7 @@ kernel void accelerate_flow(global t_speed* cells,
 // -----------------------------------------------------------------------------------------
 
 
-kernel void rebound(global t_speed* cells,
+kernel void prop_rbd_col(global t_speed* cells,
                     global t_speed* tmp_cells,
                     global int* obstacles,
                     int nx, int ny, float omega, int tt, global float* av_partial_sums, local float* av_local_sums)
@@ -69,12 +69,13 @@ kernel void rebound(global t_speed* cells,
   int index = ii * nx + jj;
 
   /* if the cell contains an obstacle */
-// -------------rebound--------------------------------
+// -------------prop_rbd_col--------------------------------
       /* don't consider occupied cells */
       if (obstacles[index])
       {
         /* called after propagate, so taking values from scratch space
         ** mirroring, and writing into main grid */
+        tmp_cells[index].speeds[0] = cells[ii * nx + x_e].speeds[0];
         tmp_cells[index].speeds[1] = cells[ii * nx + x_e].speeds[3];
         tmp_cells[index].speeds[2] = cells[y_n * nx + jj].speeds[4];
         tmp_cells[index].speeds[3] = cells[ii * nx + x_w].speeds[1];

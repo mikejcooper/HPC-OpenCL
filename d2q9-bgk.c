@@ -90,7 +90,7 @@ typedef struct
 
   cl_program program;
   cl_kernel  accelerate_flow;
-  cl_kernel  rebound;
+  cl_kernel  prop_rbd_col;
   cl_kernel  reduce;
 
   cl_mem cells;
@@ -119,12 +119,12 @@ int initialise(const char* paramfile, const char* obstaclefile,
 /*
 ** The main calculation methods.
 ** timestep calls, in order, the functions:
-** accelerate_flow(), propagate(), rebound() & collision()
+** accelerate_flow(), propagate(), prop_rbd_col() & collision()
 */
 void timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl);
 int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl);
 int propagate(const t_param params, t_speed* cells, t_speed* tmp_cells, t_ocl ocl);
-int rebound(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl);
+int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl);
 int collision(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, t_ocl ocl);
 int write_values(const t_param params, t_speed* cells, int* obstacles, float* av_vels);
 void reduce(const t_param params, int tt, t_ocl ocl);
@@ -166,7 +166,7 @@ int main(int argc, char* argv[])
   cl_int err;
   struct timeval timstr;        /* structure to hold elapsed time */
   struct rusage ru;             /* structure to hold CPU time--system and user */
-  float tic, toc;              /* floating point numbers to calculate elapsed wallclock time */
+  double tic, toc;              /* floating point numbers to calculate elapsed wallclock time */
   double usrtim;                /* floating point number to record elapsed user CPU time */
   double systim;                /* floating point number to record elapsed system CPU time */
 
@@ -218,6 +218,12 @@ int main(int argc, char* argv[])
     sizeof(float) * params.maxIters, av_vels, 0, NULL, NULL);
   checkError(err, "reading tmp_cells data", __LINE__);
 
+    // Read cells from device
+  err = clEnqueueReadBuffer(
+    ocl.queue, ocl.cells, CL_TRUE, 0,
+    sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
+  checkError(err, "reading cells data", __LINE__);
+
 
   gettimeofday(&timstr, NULL);
   toc = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
@@ -243,7 +249,7 @@ void timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obs
 {
 
   accelerate_flow(params, cells, obstacles, ocl);
-  rebound(params, cells, tmp_cells, obstacles, &tt, av_vels, ocl);
+  prop_rbd_col(params, cells, tmp_cells, obstacles, &tt, av_vels, ocl);
   reduce(params, tt, ocl);
 }
 
@@ -270,49 +276,45 @@ int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.accelerate_flow,
                                1, NULL, global, NULL, 0, NULL, NULL);
   // checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
-
-  // // Wait for kernel to finish
   // err = clFinish(ocl.queue);
   // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
 
-int rebound(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl)
+int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl)
 {
   cl_int err;
 
   // Set kernel arguments
-  err = clSetKernelArg(ocl.rebound, 0, sizeof(cl_mem), &ocl.cells);
-  checkError(err, "setting rebound arg 0", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 1, sizeof(cl_mem), &ocl.tmp_cells);
-  checkError(err, "setting rebound arg 1", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 2, sizeof(cl_mem), &ocl.obstacles);
-  checkError(err, "setting rebound arg 2", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 3, sizeof(cl_int), &params.nx);
-  checkError(err, "setting rebound arg 3", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 4, sizeof(cl_int), &params.ny);
-  checkError(err, "setting rebound arg 4", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 5, sizeof(cl_float), &params.omega);
-  checkError(err, "setting rebound arg 5", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 6, sizeof(cl_int), &tt);
-  checkError(err, "setting rebound arg 5", __LINE__); 
-  err = clSetKernelArg(ocl.rebound, 7, sizeof(cl_mem), &ocl.av_partial_sums);
-  checkError(err, "setting rebound arg 7", __LINE__); 
-  err = clSetKernelArg(ocl.rebound, 8, sizeof(float) * params.nx, NULL);
-  checkError(err, "setting rebound arg 7", __LINE__); 
+  err = clSetKernelArg(ocl.prop_rbd_col, 0, sizeof(cl_mem), &ocl.cells);
+  checkError(err, "setting prop_rbd_col arg 0", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 1, sizeof(cl_mem), &ocl.tmp_cells);
+  checkError(err, "setting prop_rbd_col arg 1", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 2, sizeof(cl_mem), &ocl.obstacles);
+  checkError(err, "setting prop_rbd_col arg 2", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 3, sizeof(cl_int), &params.nx);
+  checkError(err, "setting prop_rbd_col arg 3", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 4, sizeof(cl_int), &params.ny);
+  checkError(err, "setting prop_rbd_col arg 4", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 5, sizeof(cl_float), &params.omega);
+  checkError(err, "setting prop_rbd_col arg 5", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 6, sizeof(cl_int), &tt);
+  checkError(err, "setting prop_rbd_col arg 5", __LINE__); 
+  err = clSetKernelArg(ocl.prop_rbd_col, 7, sizeof(cl_mem), &ocl.av_partial_sums);
+  checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
+  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx, NULL);
+  checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
 
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
   size_t local[2]  = {params.nx, 1};
-  err = clEnqueueNDRangeKernel(ocl.queue, ocl.rebound,
+  err = clEnqueueNDRangeKernel(ocl.queue, ocl.prop_rbd_col,
                                2, NULL, global, local, 0, NULL, NULL);
-  // checkError(err, "enqueueing rebound kernel", __LINE__);
-
-  // // Wait for kernel to finish
+  // checkError(err, "enqueueing prop_rbd_col kernel", __LINE__);
   // err = clFinish(ocl.queue);
-  // checkError(err, "waiting for rebound kernel", __LINE__);
+  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
@@ -336,10 +338,9 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
                                1, NULL, global, NULL, 0, NULL, NULL);
   // checkError(err, "enqueueing reduce kernel", __LINE__);
-
-  // // Wait for kernel to finish
   // err = clFinish(ocl.queue);
-  // checkError(err, "waiting for reduce kernel", __LINE__);
+  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
+
 }
 
 int initialise(const char* paramfile, const char* obstaclefile,
@@ -554,8 +555,8 @@ int initialise(const char* paramfile, const char* obstaclefile,
   // Create OpenCL kernels
   ocl->accelerate_flow = clCreateKernel(ocl->program, "accelerate_flow", &err);
   checkError(err, "creating accelerate_flow kernel", __LINE__);
-  ocl->rebound = clCreateKernel(ocl->program, "rebound", &err);
-  checkError(err, "creating rebound kernel", __LINE__);  
+  ocl->prop_rbd_col = clCreateKernel(ocl->program, "prop_rbd_col", &err);
+  checkError(err, "creating prop_rbd_col kernel", __LINE__);  
   ocl->reduce = clCreateKernel(ocl->program, "reduce", &err);
   checkError(err, "creating reduce kernel", __LINE__);
 
@@ -609,7 +610,7 @@ int finalise(const t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr
   clReleaseMemObject(ocl.tmp_cells);
   clReleaseMemObject(ocl.obstacles);
   clReleaseKernel(ocl.accelerate_flow);
-  clReleaseKernel(ocl.rebound);
+  clReleaseKernel(ocl.prop_rbd_col);
   clReleaseProgram(ocl.program);
   clReleaseCommandQueue(ocl.queue);
   clReleaseContext(ocl.context);
