@@ -7,8 +7,8 @@ typedef struct
   float speeds[NSPEEDS];
 } t_speed;
 
-kernel void accelerate_flow(global t_speed* cells,
-                            global int* obstacles,
+kernel void accelerate_flow(global write_only t_speed* cells,
+                            global read_only int* obstacles,
                             int nx, int ny,
                             float density, float accel)
 {
@@ -47,7 +47,7 @@ kernel void accelerate_flow(global t_speed* cells,
 
 kernel void prop_rbd_col(global write_only t_speed* cells,
                     global read_only t_speed* tmp_cells,
-                    global int* obstacles,
+                    global read_only int* obstacles,
                     int nx, int ny, float omega, int tt, global float* av_partial_sums, local float* av_local_sums)
 {
   float tot_u = 0.0;    /* accumulated magnitudes of velocity for each cell */

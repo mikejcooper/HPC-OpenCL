@@ -281,8 +281,8 @@ int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.accelerate_flow,
                                1, NULL, global, NULL, 0, NULL, NULL);
   checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
-  err = clFinish(ocl.queue);
-  checkError(err, "waiting for accelerate_flow kernel", __LINE__);
+  // err = clFinish(ocl.queue);
+  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
@@ -320,8 +320,8 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.prop_rbd_col,
                                2, NULL, global, local, 0, NULL, NULL);
   checkError(err, "enqueueing prop_rbd_col kernel", __LINE__);
-  err = clFinish(ocl.queue);
-  checkError(err, "waiting for accelerate_flow kernel", __LINE__);
+  // err = clFinish(ocl.queue);
+  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
@@ -345,8 +345,8 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
                                1, NULL, global, NULL, 0, NULL, NULL);
   checkError(err, "enqueueing reduce kernel", __LINE__);
-  err = clFinish(ocl.queue);
-  checkError(err, "waiting for accelerate_flow kernel", __LINE__);
+  // err = clFinish(ocl.queue);
+  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
 }
 
@@ -579,7 +579,7 @@ int initialise(const char* paramfile, const char* obstaclefile,
     sizeof(t_speed) * params->nx * params->ny, NULL, &err);
   checkError(err, "creating tmp_cells buffer", __LINE__);
   ocl->obstacles = clCreateBuffer(
-    ocl->context, CL_MEM_READ_WRITE,
+    ocl->context, CL_MEM_READ_ONLY,
     sizeof(cl_int) * params->nx * params->ny, NULL, &err);
   checkError(err, "creating obstacles buffer", __LINE__);
   ocl->av_partial_sums = clCreateBuffer(
