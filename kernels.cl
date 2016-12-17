@@ -181,17 +181,17 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 }
 
 kernel void reduce(global float* av_partial_sums,
-                   global float* av_vels, int tt, int tot_cells, int work_groups)
+                   global float* av_vels, int tt, int tot_cells, int num_work_groups)
 {
   // int global_size  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
-
   if (global_id == 0){
     float total = 0.0f;
-    for (int i = 0; i < work_groups; i++) {        
-      total += av_partial_sums[i];             
+    av_vels[tt] = 0;
+    for (int i = 0; i < num_work_groups; i++) {        
+      av_vels[tt] += av_partial_sums[i];             
     }                                     
-    av_vels[tt] = total/tot_cells;    
+    av_vels[tt] = av_vels[tt]/tot_cells;    
   } 
 }
 
