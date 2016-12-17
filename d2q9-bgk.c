@@ -571,11 +571,11 @@ int initialise(const char* paramfile, const char* obstaclefile,
   // LOOK AT CL_MEM_READ_WRITE!! only wirte or read
 
   ocl->cells = clCreateBuffer(
-    ocl->context, CL_MEM_READ_WRITE,
+    ocl->context, CL_MEM_WRITE_ONLY,
     sizeof(t_speed) * params->nx * params->ny, NULL, &err);
   checkError(err, "creating cells buffer", __LINE__);
   ocl->tmp_cells = clCreateBuffer(
-    ocl->context, CL_MEM_READ_WRITE,
+    ocl->context, CL_MEM_READ_ONLY,
     sizeof(t_speed) * params->nx * params->ny, NULL, &err);
   checkError(err, "creating tmp_cells buffer", __LINE__);
   ocl->obstacles = clCreateBuffer(
