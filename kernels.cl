@@ -48,7 +48,10 @@ kernel void accelerate_flow(global write_only t_speed* cells,
 kernel void prop_rbd_col(global write_only t_speed* cells,
                     global read_only t_speed* tmp_cells,
                     global read_only int* obstacles,
-                    int nx, int ny, float omega, int tt, global float* av_partial_sums, local float* av_local_sums)
+                    int nx, int ny, float omega, int tt, 
+                    global float* av_partial_sums, local float* av_local_sums, 
+                    global float* av_vels, int tot_cells
+                    )
 {
   float tot_u = 0.0;    /* accumulated magnitudes of velocity for each cell */
   const float d1 = 1 / 36.0;
@@ -177,6 +180,18 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
     av_partial_sums[group_id] = total;    
   }
 
+  barrier(CLK_GLOBAL_MEM_FENCE);
+
+  int num_work_groups = get_num_groups(0) * get_num_groups(1);
+  int global_id    = get_global_id(0);   // ID of work-item
+
+  if (global_id == 0){
+    float total = 0.0f;
+    for (int i = 0; i < num_work_groups; i++) {        
+      total += av_partial_sums[i];             
+    }                                     
+    av_vels[tt] = total/tot_cells;    
+  } 
 
 }
 
@@ -187,11 +202,10 @@ kernel void reduce(global float* av_partial_sums,
   int global_id    = get_global_id(0);   // ID of work-item
   if (global_id == 0){
     float total = 0.0f;
-    av_vels[tt] = 0;
     for (int i = 0; i < num_work_groups; i++) {        
-      av_vels[tt] += av_partial_sums[i];             
+      total += av_partial_sums[i];             
     }                                     
-    av_vels[tt] = av_vels[tt]/tot_cells;    
+    av_vels[tt] = total/tot_cells;    
   } 
 }
 
