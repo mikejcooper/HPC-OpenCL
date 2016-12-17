@@ -15,7 +15,7 @@ kernel void accelerate_flow(global t_speed* cells,
 
  /* compute weighting factors */
   float w2 = density * accel / 36.0f;
-  float w1 = 4.0f * w2;
+  float w1 = 4 * w2;
 
 
   /* modify the 2nd row of the grid */
