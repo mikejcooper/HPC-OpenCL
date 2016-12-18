@@ -168,7 +168,6 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   for(int i = 0; i < NSPEEDS; i++){
       tmp_cells[index].speeds[i] = tmp_cells_local[0].speeds[i];
-      // printf("local = %f , global = %f\n", tmp_cells_local[0].speeds[i], tmp_cells[index].speeds[i]);
   }
 
 
@@ -180,12 +179,12 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   av_local_sums[local_id] = tot_u;
   barrier(CLK_LOCAL_MEM_FENCE);
+
   
   for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i]; 
       }
-      barrier(CLK_LOCAL_MEM_FENCE);
   }   
 
   if (local_id == 0){
@@ -199,15 +198,12 @@ kernel void reduce(global float* av_partial_sums,
 {
   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
-  
-  // event_t event;
-  // event = async_work_group_copy(tmp, av_partial_sums, 128, event);
+
 
   for (int i = num_work_groups / 2; i > 0; i >>= 1) {  
       if (global_id < i){
           av_partial_sums[global_id] += av_partial_sums[global_id + i]; 
       }
-      barrier(CLK_LOCAL_MEM_FENCE);
   }   
 
   if (global_id == 0){
