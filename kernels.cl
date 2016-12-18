@@ -185,7 +185,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i]; 
       }
-      // barrier(CLK_LOCAL_MEM_FENCE);
+      barrier(CLK_LOCAL_MEM_FENCE);
   }   
 
   if (local_id == 0){
