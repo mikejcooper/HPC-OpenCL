@@ -320,7 +320,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
-  size_t local[2]  = {params.nx, 2};
+  size_t local[2]  = {params.nx/2, 2};
    // size_t local[2]  = {1, 1};
 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.prop_rbd_col,
@@ -335,7 +335,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
 void reduce(const t_param params, int tt, t_ocl ocl)
 {
   cl_int err;
-  int work_group_size = params.ny / 2;
+  int work_group_size = params.ny / 1;
 
   // Set kernel arguments
   err = clSetKernelArg(ocl.reduce, 0, sizeof(cl_mem), &ocl.av_partial_sums);

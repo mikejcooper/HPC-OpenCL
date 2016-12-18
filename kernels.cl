@@ -167,7 +167,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   int num_wrk_items  = get_local_size(0) * get_local_size(1);   // # work-items in work-group 
   int local_id       = get_local_size(0) * get_local_id(1) + get_local_id(0);     // ID of work-item within work-group          
-  int group_id       = get_group_id(1);     // ID of work-group
+  int group_id       = get_num_groups(0) * get_group_id(1) + get_group_id(0);     // ID of work-group
 
   av_local_sums[local_id] = tot_u;
   barrier(CLK_LOCAL_MEM_FENCE);
