@@ -185,6 +185,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i]; 
       }
+      // barrier(CLK_LOCAL_MEM_FENCE);
   }   
 
   if (local_id == 0){
@@ -204,6 +205,7 @@ kernel void reduce(global float* av_partial_sums,
       if (global_id < i){
           av_partial_sums[global_id] += av_partial_sums[global_id + i]; 
       }
+      barrier(CLK_LOCAL_MEM_FENCE);
   }   
 
   if (global_id == 0){
