@@ -199,17 +199,8 @@ kernel void reduce(global float* av_partial_sums,
 {
   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
-  shared_mem[global_id] = 0;
-
-  // while (i < n) { sdata[tid] += g_idata[i] + g_idata[i+1]; i += gridSize; }
-  // while(i < ) {
-  //     shared_mem[global_id] = av_partial_sums[global_id] + av_partial_sums[global_id + 1];  
-  //     i++;
-  // }
-
-
   shared_mem[global_id] = av_partial_sums[global_id];
-  
+
   barrier(CLK_LOCAL_MEM_FENCE);
   
   // #pragma unroll 1
