@@ -166,7 +166,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
   // --------------Local REDUCTION -----------------
 
   int num_wrk_items  = get_local_size(0) * get_local_size(1);   // # work-items in work-group 
-  int local_id       = get_local_id(0) * get_local_id(1) + get_local_id(0);     // ID of work-item within work-group          
+  int local_id       = get_local_size(0) * get_local_id(1) + get_local_id(0);     // ID of work-item within work-group          
   int group_id       = get_group_id(1);     // ID of work-group
 
   av_local_sums[local_id] = tot_u;
@@ -177,21 +177,34 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
     for (int i=0; i<num_wrk_items; i++) {        
       total += av_local_sums[i];             
     }                                     
-    av_partial_sums[group_id] = total;    
+    av_partial_sums[group_id] = total;
+    // printf("%d\n", group_id);
+
+
   }
 
-  barrier(CLK_GLOBAL_MEM_FENCE);
+  // if (tt == 0) {
+  //   printf("local_id = %d\n", local_id);
+  // }
 
-  int num_work_groups = get_num_groups(0) * get_num_groups(1);
-  int global_id    = get_global_id(0);   // ID of work-item
+  // barrier(CLK_GLOBAL_MEM_FENCE);
 
-  if (global_id == 0){
-    float total = 0.0f;
-    for (int i = 0; i < num_work_groups; i++) {        
-      total += av_partial_sums[i];             
-    }                                     
-    av_vels[tt] = total/tot_cells;    
-  } 
+  // int num_work_groups = get_num_groups(0) * get_num_groups(1);
+  // int global_id    = get_global_id(0);   // ID of work-item
+
+  // if (global_id == 0){
+  //   float total = 0.0f;
+  //   for (int i = 0; i < num_work_groups; i++) {        
+  //     total += av_partial_sums[i];             
+  //   }                                     
+  //   av_vels[tt] = total/tot_cells; 
+  //   printf("tt = %d\n", tt);
+   
+  // } 
+
+  // printf("num_work_groups = %d\n", num_work_groups);
+  // printf("num_wrk_items = %d\n", num_wrk_items);
+
 
 }
 
@@ -202,6 +215,7 @@ kernel void reduce(global float* av_partial_sums,
   int global_id    = get_global_id(0);   // ID of work-item
   if (global_id == 0){
     float total = 0.0f;
+    // printf("%d\n", num_work_groups);
     for (int i = 0; i < num_work_groups; i++) {        
       total += av_partial_sums[i];             
     }                                     

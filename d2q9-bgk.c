@@ -124,7 +124,7 @@ int initialise(const char* paramfile, const char* obstaclefile,
 void timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl);
 int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl);
 int propagate(const t_param params, t_speed* cells, t_speed* tmp_cells, t_ocl ocl);
-int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl);
+int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl);
 int collision(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, t_ocl ocl);
 int write_values(const t_param params, t_speed* cells, int* obstacles, float* av_vels);
 void reduce(const t_param params, int tt, t_ocl ocl);
@@ -255,7 +255,7 @@ void timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obs
 {
 
   accelerate_flow(params, cells, obstacles, ocl);
-  prop_rbd_col(params, cells, tmp_cells, obstacles, &tt, av_vels, ocl);
+  prop_rbd_col(params, cells, tmp_cells, obstacles, tt, av_vels, ocl);
   reduce(params, tt, ocl);
 }
 
@@ -288,7 +288,7 @@ int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl 
   return EXIT_SUCCESS;
 }
 
-int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl)
+int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl)
 {
   cl_int err;
 
@@ -309,7 +309,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
   checkError(err, "setting prop_rbd_col arg 5", __LINE__); 
   err = clSetKernelArg(ocl.prop_rbd_col, 7, sizeof(cl_mem), &ocl.av_partial_sums);
   checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
-  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx * 1, NULL);
+  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx * 2, NULL);
   checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
 
   err = clSetKernelArg(ocl.prop_rbd_col, 9, sizeof(cl_mem), &ocl.av_vels);
@@ -320,7 +320,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
-  size_t local[2]  = {params.nx, 1};
+  size_t local[2]  = {params.nx, 2};
    // size_t local[2]  = {1, 1};
 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.prop_rbd_col,
@@ -335,7 +335,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
 void reduce(const t_param params, int tt, t_ocl ocl)
 {
   cl_int err;
-  int work_group_size = params.ny / 1;
+  int work_group_size = params.ny / 2;
 
   // Set kernel arguments
   err = clSetKernelArg(ocl.reduce, 0, sizeof(cl_mem), &ocl.av_partial_sums);
