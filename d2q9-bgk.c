@@ -346,6 +346,8 @@ int rebound(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obsta
 void reduce(const t_param params, int tt, t_ocl ocl)
 {
   cl_int err;
+  int work_group_size = params.ny / 1;
+
 
   // Set kernel arguments
   err = clSetKernelArg(ocl.reduce, 0, sizeof(cl_mem), &ocl.av_partial_sums);
@@ -355,6 +357,8 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   err = clSetKernelArg(ocl.reduce, 2, sizeof(cl_int), &tt);
   checkError(err, "setting reduce arg 2", __LINE__);
   err = clSetKernelArg(ocl.reduce, 3, sizeof(cl_int), &params.tot_cells);
+  checkError(err, "setting reduce arg 2", __LINE__);
+  err = clSetKernelArg(ocl.reduce, 4, sizeof(float) * work_group_size, NULL);
   checkError(err, "setting reduce arg 2", __LINE__);
 
   // Enqueue kernel
