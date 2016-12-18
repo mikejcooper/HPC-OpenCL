@@ -215,6 +215,13 @@ int main(int argc, char* argv[])
 #endif
   }  
 
+  Read tmp_cells from device
+  err = clEnqueueReadBuffer(
+    ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
+    sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
+  checkError(err, "reading tmp_cells data", __LINE__);
+
+
   // Read av_vels from device
   err = clEnqueueReadBuffer(
     ocl.queue, ocl.av_vels, CL_TRUE, 0,
