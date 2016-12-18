@@ -1,9 +1,9 @@
-Running on host node47-002
-Time is Sat Dec 17 12:04:20 GMT 2016
+Running on host node46-002
+Time is Sun Dec 18 19:17:55 GMT 2016
 Directory is /panfs/panasas01/cosc/mc14641/Playground/HPC-OpenCL
-PBS job ID is 5277514.master.cm.cluster
+PBS job ID is 5282805.master.cm.cluster
 This jobs runs on the following machines:
-node47-002
+node46-002
 Using GPU at index 0
 
 Available OpenCL devices:
@@ -14,7 +14,15 @@ Selected OpenCL device:
 -> Tesla K20m (index=0)
 
 ==done==
-Reynolds number:		9.754184722900E+00
-Elapsed time:			3.346194 (s)
-Elapsed user CPU time:		2.674593 (s)
-Elapsed system CPU time:	0.957854 (s)
+Reynolds number:		3.376666307449E+00
+Elapsed time:			86.212495 (s)
+Elapsed user CPU time:		52.644996 (s)
+Elapsed system CPU time:	33.877849 (s)
+
+Available OpenCL devices:
+ 0: Tesla K20m
+ 1: Tesla K20m
+
+Selected OpenCL device:
+-> Tesla K20m (index=0)
+
