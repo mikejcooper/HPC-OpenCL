@@ -45,12 +45,12 @@ kernel void accelerate_flow(global write_only t_speed* cells,
 }
 
 // -----------------------------------------------------------------------------------------
-
+//  Add volatile types *****
 kernel void prop_rbd_col(global write_only t_speed* cells,
                     global read_only t_speed* tmp_cells,
                     global read_only int* obstacles,
                     int nx, int ny, float omega, int tt, 
-                    global float* av_partial_sums, local volatile float* av_local_sums)
+                    global float* av_partial_sums, local float* av_local_sums)
 {
   float tot_u = 0.0;    /* accumulated magnitudes of velocity for each cell */
   const float d1 = 1 / 36.0;
@@ -59,7 +59,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
   int jj = get_global_id(0);
   int ii = get_global_id(1);
 
-  // int av_local_sums2 = get_local_id(0);
+  t_speed tmp_cells_local[1]; 
 
   /* determine indices of axis-direction   neighbours
   ** respecting periodic boundary conditions (wrap around) */
@@ -70,6 +70,10 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   int index = ii * nx + jj;
 
+  for(int i = 0; i < NSPEEDS; i++){
+    tmp_cells_local[0].speeds[i] = tmp_cells[index].speeds[i];
+  }
+
   /* if the cell contains an obstacle */
 // -------------prop_rbd_col--------------------------------
       /* don't consider occupied cells */
@@ -77,15 +81,15 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
       {
         /* called after propagate, so taking values from scratch space
         ** mirroring, and writing into main grid */
-        tmp_cells[index].speeds[0] = cells[ii * nx + x_e].speeds[0];
-        tmp_cells[index].speeds[1] = cells[ii * nx + x_e].speeds[3];
-        tmp_cells[index].speeds[2] = cells[y_n * nx + jj].speeds[4];
-        tmp_cells[index].speeds[3] = cells[ii * nx + x_w].speeds[1];
-        tmp_cells[index].speeds[4] = cells[y_s * nx + jj].speeds[2];
-        tmp_cells[index].speeds[5] = cells[y_n * nx + x_e].speeds[7];
-        tmp_cells[index].speeds[6] = cells[y_n * nx + x_w].speeds[8];
-        tmp_cells[index].speeds[7] = cells[y_s * nx + x_w].speeds[5];
-        tmp_cells[index].speeds[8] = cells[y_s * nx + x_e].speeds[6];
+        tmp_cells_local[0].speeds[0] = cells[ii * nx + x_e].speeds[0];
+        tmp_cells_local[0].speeds[1] = cells[ii * nx + x_e].speeds[3];
+        tmp_cells_local[0].speeds[2] = cells[y_n * nx + jj].speeds[4];
+        tmp_cells_local[0].speeds[3] = cells[ii * nx + x_w].speeds[1];
+        tmp_cells_local[0].speeds[4] = cells[y_s * nx + jj].speeds[2];
+        tmp_cells_local[0].speeds[5] = cells[y_n * nx + x_e].speeds[7];
+        tmp_cells_local[0].speeds[6] = cells[y_n * nx + x_w].speeds[8];
+        tmp_cells_local[0].speeds[7] = cells[y_s * nx + x_w].speeds[5];
+        tmp_cells_local[0].speeds[8] = cells[y_s * nx + x_e].speeds[6];
       } 
 // ----------------END--------------------------------------------
       else 
@@ -122,45 +126,51 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
                          + cells[y_n * nx + x_w].speeds[8]))
                      * local_density_invert;
 
-        tmp_cells[index].speeds[0] = cells[ii * nx + jj].speeds[0]
+        tmp_cells_local[0].speeds[0] = cells[ii * nx + jj].speeds[0]
         + omega
         * (local_density * d1 * (16.0f - (u_x * u_x + u_y * u_y) * 864.0f * d1)
            - cells[ii * nx + jj].speeds[0]);
-        tmp_cells[index].speeds[1] = cells[ii * nx + x_w].speeds[1]
+        tmp_cells_local[0].speeds[1] = cells[ii * nx + x_w].speeds[1]
         + omega
         * (local_density * d1 * (4.0f + u_x * 12.0f + (u_x * u_x) * 648.0f * d1- (216.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[ii * nx + x_w].speeds[1]);
-        tmp_cells[index].speeds[2] = cells[y_s * nx + jj].speeds[2]
+        tmp_cells_local[0].speeds[2] = cells[y_s * nx + jj].speeds[2]
         + omega
         * (local_density * d1 * (4.0f + u_y * 12.0f + (u_y * u_y) * 648.0f * d1 - (216.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[y_s * nx + jj].speeds[2]);
-        tmp_cells[index].speeds[3] = cells[ii * nx + x_e].speeds[3]
+        tmp_cells_local[0].speeds[3] = cells[ii * nx + x_e].speeds[3]
         + omega
         * (local_density * d1 * (4.0f - u_x * 12.0f + (u_x * u_x) * 648.0f * d1 - (216.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[ii * nx + x_e].speeds[3]);
-        tmp_cells[index].speeds[4] = cells[y_n * nx + jj].speeds[4]
+        tmp_cells_local[0].speeds[4] = cells[y_n * nx + jj].speeds[4]
         + omega
         * (local_density * d1 * (4.0f - u_y * 12.0f + (u_y * u_y) * 648.0f * d1 - (216.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[y_n * nx + jj].speeds[4]);
-        tmp_cells[index].speeds[5] = cells[y_s * nx + x_w].speeds[5]
+        tmp_cells_local[0].speeds[5] = cells[y_s * nx + x_w].speeds[5]
         + omega
         * (local_density * d1 * (1.0f + (u_x + u_y) * 3.0f + ((u_x + u_y) * (u_x + u_y)) * 162.0f * d1 - (54.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[y_s * nx + x_w].speeds[5]);
-        tmp_cells[index].speeds[6] = cells[y_s * nx + x_e].speeds[6]
+        tmp_cells_local[0].speeds[6] = cells[y_s * nx + x_e].speeds[6]
         + omega
         * (local_density * d1 * (1.0f + (- u_x + u_y) * 3.0f + ((- u_x + u_y) * (- u_x + u_y)) * 162.0f * d1 - (54.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[y_s * nx + x_e].speeds[6]);
-        tmp_cells[index].speeds[7] = cells[y_n * nx + x_e].speeds[7]
+        tmp_cells_local[0].speeds[7] = cells[y_n * nx + x_e].speeds[7]
         + omega
         * (local_density * d1 * (1.0f + (- u_x - u_y) * 3.0f + ((- u_x - u_y) * (- u_x - u_y)) * 162.0f * d1 - (54.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[y_n * nx + x_e].speeds[7]);
-        tmp_cells[index].speeds[8] = cells[y_n * nx + x_w].speeds[8]
+        tmp_cells_local[0].speeds[8] = cells[y_n * nx + x_w].speeds[8]
         + omega
         * (local_density * d1 * (1.0f + (u_x - u_y) * 3.0f + ((u_x - u_y) * (u_x - u_y)) * 162.0f * d1 - (54.0f * d1 * (u_x * u_x + u_y * u_y)))
            - cells[y_n * nx + x_w].speeds[8]);
 
         tot_u += sqrt((u_x * u_x) + (u_y * u_y));
+    }
+
+  for(int i = 0; i < NSPEEDS; i++){
+      tmp_cells[index].speeds[i] = tmp_cells_local[0].speeds[i];
+      // printf("local = %f , global = %f\n", tmp_cells_local[0].speeds[i], tmp_cells[index].speeds[i]);
   }
+
 
   // --------------Local REDUCTION -----------------
 
@@ -185,11 +195,13 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 }
 
 kernel void reduce(global float* av_partial_sums,
-                   global float* av_vels, int tt, int tot_cells)
+                   global float* av_vels, int tt, int tot_cells, local float* tmp)
 {
   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
   
+  // event_t event;
+  // event = async_work_group_copy(tmp, av_partial_sums, 128, event);
 
   for (int i = num_work_groups / 2; i > 0; i >>= 1) {  
       if (global_id < i){

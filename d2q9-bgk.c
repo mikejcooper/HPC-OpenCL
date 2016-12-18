@@ -310,7 +310,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
   err = clSetKernelArg(ocl.prop_rbd_col, 7, sizeof(cl_mem), &ocl.av_partial_sums);
   checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
   err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx * 1, NULL);
-  checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
+  checkError(err, "setting prop_rbd_col arg 7", __LINE__);   
 
 
   // Enqueue kernel
@@ -340,6 +340,8 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   err = clSetKernelArg(ocl.reduce, 2, sizeof(cl_int), &tt);
   checkError(err, "setting reduce arg 2", __LINE__);
   err = clSetKernelArg(ocl.reduce, 3, sizeof(cl_int), &params.tot_cells);
+  checkError(err, "setting reduce arg 2", __LINE__);  
+  err = clSetKernelArg(ocl.reduce, 4, sizeof(float) * params.nx * 1, NULL);
   checkError(err, "setting reduce arg 2", __LINE__);
 
 
