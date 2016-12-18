@@ -46,14 +46,12 @@ kernel void accelerate_flow(global write_only t_speed* cells,
 
 // -----------------------------------------------------------------------------------------
 
-
+// MAKE VOLATILE**********************
 kernel void prop_rbd_col(global write_only t_speed* cells,
                     global read_only t_speed* tmp_cells,
                     global read_only int* obstacles,
                     int nx, int ny, float omega, int tt, 
-                    global float* av_partial_sums, local float* av_local_sums, 
-                    global float* av_vels, int tot_cells
-                    )
+                    global float* av_partial_sums, local float* av_local_sums)
 {
   float tot_u = 0.0;    /* accumulated magnitudes of velocity for each cell */
   const float d1 = 1 / 36.0;
@@ -181,30 +179,9 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
       barrier(CLK_LOCAL_MEM_FENCE);
   }   
 
-
-
   if (local_id == 0){
       av_partial_sums[group_id] = av_local_sums[0];                               
   }
-
-
-  // if (local_id < 32)
-  //   {
-  //       if (blockSize >=  64) { av_local_sums[local_id] += av_local_sums[local_id + 32]; }
-  //       if (blockSize >=  32) { av_local_sums[local_id] += av_local_sums[local_id + 16]; }
-  //       if (blockSize >=  16) { av_local_sums[local_id] += av_local_sums[local_id +  8]; }
-  //       if (blockSize >=   8) { av_local_sums[local_id] += av_local_sums[local_id +  4]; }
-  //       if (blockSize >=   4) { av_local_sums[local_id] += av_local_sums[local_id +  2]; }
-  //       if (blockSize >=   2) { av_local_sums[local_id] += av_local_sums[local_id +  1]; }
-  //   }   
-
-  // if (local_id == 0){
-  //   float total = 0.0f;
-  //   for (int i = 0; i < num_wrk_items; i++) {        
-  //     total += av_local_sums[i];             
-  //   }                                     
-  //   av_partial_sums[group_id] = total;
-  // }
 
 }
 
@@ -214,12 +191,15 @@ kernel void reduce(global float* av_partial_sums,
   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
   
-  if (global_id == 0){
-    float total = 0.0f;
-    for (int i = 0; i < num_work_groups; i++) {        
-      total += av_partial_sums[i];             
-    }                                     
-    av_vels[tt] = total/tot_cells;    
-  }
 
+  for (int i = num_work_groups / 2; i > 0; i >>= 1) {  
+      if (global_id < i){
+          av_partial_sums[global_id] += av_partial_sums[global_id + i]; 
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+  }   
+
+  if (global_id == 0){
+      av_vels[tt] = av_partial_sums[0]/tot_cells;                               
+  }
 }
