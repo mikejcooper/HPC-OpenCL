@@ -309,7 +309,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
   checkError(err, "setting prop_rbd_col arg 5", __LINE__); 
   err = clSetKernelArg(ocl.prop_rbd_col, 7, sizeof(cl_mem), &ocl.av_partial_sums);
   checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
-  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx * 2, NULL);
+  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx * 1, NULL);
   checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
 
   err = clSetKernelArg(ocl.prop_rbd_col, 9, sizeof(cl_mem), &ocl.av_vels);
@@ -320,7 +320,7 @@ int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* 
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
-  size_t local[2]  = {params.nx/2, 2};
+  size_t local[2]  = {params.nx, 1};
    // size_t local[2]  = {1, 1};
 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.prop_rbd_col,
@@ -346,19 +346,13 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   checkError(err, "setting reduce arg 2", __LINE__);
   err = clSetKernelArg(ocl.reduce, 3, sizeof(cl_int), &params.tot_cells);
   checkError(err, "setting reduce arg 2", __LINE__);
-  err = clSetKernelArg(ocl.reduce, 4, sizeof(cl_int), &work_group_size);
-  checkError(err, "setting reduce arg 2", __LINE__);
 
-  // Enqueue kernel
-  // size_t global[1] = {params.ny};
-  // err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
-  //                              1, NULL, global, NULL, 0, NULL, NULL);
-  // checkError(err, "enqueueing reduce kernel", __LINE__);
-  
-  size_t global[1] = {1};
+  //Enqueue kernel
+  size_t global[1] = {work_group_size};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
                                1, NULL, global, NULL, 0, NULL, NULL);
   checkError(err, "enqueueing reduce kernel", __LINE__);
+
     // err = clFinish(ocl.queue);
 
 }

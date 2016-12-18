@@ -172,55 +172,41 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
   av_local_sums[local_id] = tot_u;
   barrier(CLK_LOCAL_MEM_FENCE);
 
+  for (int i = 0; i < num_wrk_items; i *= 2) {  
+      if ((local_id % (2 * i)) == 0) {
+        av_local_sums[local_id] += av_local_sums[local_id + i]; 
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+  }      
+
   if (local_id == 0){
-    float total = 0.0f;
-    for (int i=0; i<num_wrk_items; i++) {        
-      total += av_local_sums[i];             
-    }                                     
-    av_partial_sums[group_id] = total;
-    // printf("%d\n", group_id);
-
-
+      av_partial_sums[group_id] = av_local_sums[0];                               
   }
 
-  // if (tt == 0) {
-  //   printf("local_id = %d\n", local_id);
-  // }
-
-  // barrier(CLK_GLOBAL_MEM_FENCE);
-
-  // int num_work_groups = get_num_groups(0) * get_num_groups(1);
-  // int global_id    = get_global_id(0);   // ID of work-item
-
-  // if (global_id == 0){
+  // if (local_id == 0){
   //   float total = 0.0f;
-  //   for (int i = 0; i < num_work_groups; i++) {        
-  //     total += av_partial_sums[i];             
+  //   for (int i = 0; i < num_wrk_items; i++) {        
+  //     total += av_local_sums[i];             
   //   }                                     
-  //   av_vels[tt] = total/tot_cells; 
-  //   printf("tt = %d\n", tt);
-   
-  // } 
-
-  // printf("num_work_groups = %d\n", num_work_groups);
-  // printf("num_wrk_items = %d\n", num_wrk_items);
-
+  //   av_partial_sums[group_id] = total;
+  // }
 
 }
 
 kernel void reduce(global float* av_partial_sums,
-                   global float* av_vels, int tt, int tot_cells, int num_work_groups)
+                   global float* av_vels, int tt, int tot_cells)
 {
-  // int global_size  = get_global_size(0);  // # work-items   == # work-groups           
+  int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
+  
   if (global_id == 0){
     float total = 0.0f;
-    // printf("%d\n", num_work_groups);
     for (int i = 0; i < num_work_groups; i++) {        
       total += av_partial_sums[i];             
     }                                     
     av_vels[tt] = total/tot_cells;    
-  } 
+  }
+
 }
 
 
