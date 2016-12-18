@@ -176,28 +176,11 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   // --------------Local REDUCTION -----------------
 
-  // int num_wrk_items  = get_local_size(0) * get_local_size(1);   // # work-items in work-group 
-  // int local_id       = get_local_size(0) * get_local_id(1) + get_local_id(0);     // ID of work-item within work-group          
-  // int group_id       = get_num_groups(0) * get_group_id(1) + get_group_id(0);     // ID of work-group
-
-  int num_wrk_items  = get_local_size(0);   // No. of items in work group (number of columns)              
-  int local_id       = get_local_id(0);     // ID of coloumn X in the work group             
-  int group_id       = get_group_id(1);     // ID of specific work group
+  int num_wrk_items  = get_local_size(0) * get_local_size(1);   // # work-items in work-group 
+  int local_id       = get_local_size(0) * get_local_id(1) + get_local_id(0);     // ID of work-item within work-group          
+  int group_id       = get_num_groups(0) * get_group_id(1) + get_group_id(0);     // ID of work-group
 
   av_local_sums[local_id] = tot_u;
-  barrier(CLK_LOCAL_MEM_FENCE);
-
-
-
-  // if (local_id == 0){
-  //   float total = 0.0f;
-  //   for (int i=0; i<num_wrk_items; i++) {        
-  //     total += av_local_sums[i];             
-  //   }                                     
-  //   av_partial_sums[group_id] = total;    
-  // }
-
-
 
   reduce_local(av_local_sums, local_id, num_wrk_items);
 
@@ -212,26 +195,9 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 kernel void reduce(global float* av_partial_sums,
                    global float* av_vels, int tt, int tot_cells, local float* shared_mem)
 {
-
-
-  // int global_size  = get_global_size(0);    // number of items the work group (number of columns)              
-  // int global_id    = get_global_id(0);   // ID of specific coloumn in the work group 
-
-  // if (global_id == 0){
-  //   float total = 0.0f;
-  //   for (int i=0; i<global_size; i++) {        
-  //     total += av_partial_sums[i];             
-  //   }                                     
-  //   av_vels[tt] = total/tot_cells;    
-  // } 
-
-
-
   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
   shared_mem[global_id] = av_partial_sums[global_id];
-
-  barrier(CLK_LOCAL_MEM_FENCE);
 
   reduce_local(shared_mem, global_id, num_work_groups);
 
@@ -240,18 +206,19 @@ kernel void reduce(global float* av_partial_sums,
   }
 }
 
-void reduce_local(local float* shared_mem, int id, int work_items){
+void reduce_local(local float* shared_mem, int id, int group_size){
+  barrier(CLK_LOCAL_MEM_FENCE);
   
   // if (id == 0){
   //   float total = 0.0f;
-  //   for (int i=0; i<work_items; i++) {        
+  //   for (int i=0; i<group_size; i++) {        
   //     total += shared_mem[i];             
   //   }                                     
   //   shared_mem[0] = total;    
   // } 
 
   // #pragma unroll 1
-  for (int i = work_items / 2; i > 0; i /= 2) {  
+  for (int i = group_size / 2; i > 32; i >>= 1) {  
       if (id < i){
           shared_mem[id] += shared_mem[id + i]; 
       }
@@ -263,20 +230,20 @@ void reduce_local(local float* shared_mem, int id, int work_items){
   // if (blockSize >= 256) { if (id < 128) { shared_mem[id] += shared_mem[id + 128]; } barrier(CLK_LOCAL_MEM_FENCE); }
   // if (blockSize >= 128) { if (id <  64) { shared_mem[id] += shared_mem[id +  64]; } barrier(CLK_LOCAL_MEM_FENCE); }
     
-  // if (id < 32)
-  // {
-  //     if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=  32) { shared_mem[id] += shared_mem[id + 16]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=  16) { shared_mem[id] += shared_mem[id +  8]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=   8) { shared_mem[id] += shared_mem[id +  4]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=   4) { shared_mem[id] += shared_mem[id +  2]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=   2) { shared_mem[id] += shared_mem[id +  1]; }
-  // }
+  if (id < 32)
+  {
+      if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=  32) { shared_mem[id] += shared_mem[id + 16]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=  16) { shared_mem[id] += shared_mem[id +  8]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=   8) { shared_mem[id] += shared_mem[id +  4]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=   4) { shared_mem[id] += shared_mem[id +  2]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=   2) { shared_mem[id] += shared_mem[id +  1]; }
+  }
 }
 
 
