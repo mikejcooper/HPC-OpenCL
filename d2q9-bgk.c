@@ -341,7 +341,7 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   checkError(err, "setting reduce arg 2", __LINE__);
   err = clSetKernelArg(ocl.reduce, 3, sizeof(cl_int), &params.tot_cells);
   checkError(err, "setting reduce arg 2", __LINE__);  
-  err = clSetKernelArg(ocl.reduce, 4, sizeof(float) * params.nx * 1, NULL);
+  err = clSetKernelArg(ocl.reduce, 4, sizeof(float) * work_group_size, NULL);
   checkError(err, "setting reduce arg 2", __LINE__);
 
 

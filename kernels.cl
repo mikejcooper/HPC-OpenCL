@@ -2,7 +2,7 @@
 
 #define NSPEEDS         9
 #define blockSize 128
-
+#define nIsPow2 1
 
 typedef struct
 {
@@ -181,7 +181,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
   barrier(CLK_LOCAL_MEM_FENCE);
 
   
-  for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
+  for (int i = num_wrk_items / 2; i > 0; i /= 2) {  
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i]; 
       }
@@ -195,20 +195,72 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 }
 
 kernel void reduce(global float* av_partial_sums,
-                   global float* av_vels, int tt, int tot_cells, local float* tmp)
+                   global float* av_vels, int tt, int tot_cells, local float* shared_mem)
 {
   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
+  shared_mem[global_id] = 0;
+
+  // while (i < n) { sdata[tid] += g_idata[i] + g_idata[i+1]; i += gridSize; }
+  // while(i < ) {
+  //     shared_mem[global_id] = av_partial_sums[global_id] + av_partial_sums[global_id + 1];  
+  //     i++;
+  // }
 
 
-  for (int i = num_work_groups / 2; i > 0; i >>= 1) {  
+  shared_mem[global_id] = av_partial_sums[global_id];
+  
+  barrier(CLK_LOCAL_MEM_FENCE);
+  
+  // #pragma unroll 1
+  for (int i = num_work_groups / 2; i > 32; i /= 2) {  
       if (global_id < i){
-          av_partial_sums[global_id] += av_partial_sums[global_id + i]; 
+          shared_mem[global_id] += shared_mem[global_id + i]; 
       }
       barrier(CLK_LOCAL_MEM_FENCE);
-  }   
+  }
+
+  //do reduction in shared mem
+  // if (blockSize >= 512) { if (global_id < 256) { shared_mem[global_id] += shared_mem[global_id + 256]; } barrier(CLK_LOCAL_MEM_FENCE); }
+  // if (blockSize >= 256) { if (global_id < 128) { shared_mem[global_id] += shared_mem[global_id + 128]; } barrier(CLK_LOCAL_MEM_FENCE); }
+  // if (blockSize >= 128) { if (global_id <  64) { shared_mem[global_id] += shared_mem[global_id +  64]; } barrier(CLK_LOCAL_MEM_FENCE); }
+    
+
+  if (global_id < 32)
+  {
+      if (blockSize >=  64) { shared_mem[global_id] += shared_mem[global_id + 32]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=  32) { shared_mem[global_id] += shared_mem[global_id + 16]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=  16) { shared_mem[global_id] += shared_mem[global_id +  8]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=   8) { shared_mem[global_id] += shared_mem[global_id +  4]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=   4) { shared_mem[global_id] += shared_mem[global_id +  2]; }
+      barrier(CLK_LOCAL_MEM_FENCE);
+      if (blockSize >=   2) { shared_mem[global_id] += shared_mem[global_id +  1]; }
+  }
 
   if (global_id == 0){
-      av_vels[tt] = av_partial_sums[0]/tot_cells;                               
+      av_vels[tt] = shared_mem[0]/tot_cells;                               
   }
 }
+
+// kernel void reduce(global float* av_partial_sums,
+//                    global float* av_vels, int tt, int tot_cells, local float* shared_mem)
+// {
+//   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
+//   int global_id    = get_global_id(0);   // ID of work-item
+  
+
+//   for (int i = num_work_groups / 2; i > 0; i /= 2) {  
+//       if (global_id < i){
+//           av_partial_sums[global_id] += av_partial_sums[global_id + i]; 
+//       }
+//       barrier(CLK_LOCAL_MEM_FENCE);
+//   }   
+
+//   if (global_id == 0){
+//       av_vels[tt] = av_partial_sums[0]/tot_cells;                               
+//   }
+// }
