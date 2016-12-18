@@ -90,7 +90,7 @@ typedef struct
 
   cl_program program;
   cl_kernel  accelerate_flow;
-  cl_kernel  rebound;
+  cl_kernel  prop_rbd_col;
   cl_kernel  reduce;
 
   cl_mem cells;
@@ -119,12 +119,12 @@ int initialise(const char* paramfile, const char* obstaclefile,
 /*
 ** The main calculation methods.
 ** timestep calls, in order, the functions:
-** accelerate_flow(), propagate(), rebound() & collision()
+** accelerate_flow(), propagate(), prop_rbd_col() & collision()
 */
-float timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl);
+void timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl);
 int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl);
 int propagate(const t_param params, t_speed* cells, t_speed* tmp_cells, t_ocl ocl);
-int rebound(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl);
+int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl);
 int collision(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, t_ocl ocl);
 int write_values(const t_param params, t_speed* cells, int* obstacles, float* av_vels);
 void reduce(const t_param params, int tt, t_ocl ocl);
@@ -138,8 +138,6 @@ int finalise(const t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr
 ** The total should remain constant from one timestep to the next. */
 float total_density(const t_param params, t_speed* cells);
 
-/* compute average velocity */
-float av_velocity(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl);
 
 /* calculate Reynolds number */
 float calc_reynolds(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl);
@@ -148,6 +146,8 @@ float calc_reynolds(const t_param params, t_speed* cells, int* obstacles, t_ocl 
 void checkError(cl_int err, const char *op, const int line);
 void die(const char* message, const int line, const char* file);
 void usage(const char* exe);
+
+void clPrintDevInfo(cl_device_id device);
 
 cl_device_id selectOpenCLDevice();
 
@@ -168,7 +168,7 @@ int main(int argc, char* argv[])
   cl_int err;
   struct timeval timstr;        /* structure to hold elapsed time */
   struct rusage ru;             /* structure to hold CPU time--system and user */
-  float tic, toc;              /* floating point numbers to calculate elapsed wallclock time */
+  double tic, toc;              /* floating point numbers to calculate elapsed wallclock time */
   double usrtim;                /* floating point number to record elapsed user CPU time */
   double systim;                /* floating point number to record elapsed system CPU time */
 
@@ -202,7 +202,6 @@ int main(int argc, char* argv[])
 
   for (int tt = 0; tt < params.maxIters; tt++)
   {
-
     timestep(params, cells, tmp_cells, obstacles, tt, av_vels, ocl);
     cl_mem temp = ocl.cells;
     ocl.cells = ocl.tmp_cells;
@@ -215,18 +214,18 @@ int main(int argc, char* argv[])
 #endif
   }  
 
-  //Read tmp_cells from device
-  err = clEnqueueReadBuffer(
-    ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
-    sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
-  checkError(err, "reading tmp_cells data", __LINE__);
-
-
+  err = clFinish(ocl.queue);
   // Read av_vels from device
   err = clEnqueueReadBuffer(
     ocl.queue, ocl.av_vels, CL_TRUE, 0,
     sizeof(float) * params.maxIters, av_vels, 0, NULL, NULL);
   checkError(err, "reading tmp_cells data", __LINE__);
+
+    // Read cells from device
+  err = clEnqueueReadBuffer(
+    ocl.queue, ocl.cells, CL_TRUE, 0,
+    sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
+  checkError(err, "reading cells data", __LINE__);
 
 
   gettimeofday(&timstr, NULL);
@@ -243,34 +242,21 @@ int main(int argc, char* argv[])
   printf("Elapsed time:\t\t\t%.6lf (s)\n", toc - tic);
   printf("Elapsed user CPU time:\t\t%.6lf (s)\n", usrtim);
   printf("Elapsed system CPU time:\t%.6lf (s)\n", systim);
+  
+  clPrintDevInfo(selectOpenCLDevice());
+
   write_values(params, cells, obstacles, av_vels);
   finalise(&params, &cells, &tmp_cells, &obstacles, &av_vels, ocl);
 
   return EXIT_SUCCESS;
 }
 
-float timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl)
+void timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl)
 {
-  cl_int err;
-
-  // Write cells to device
-  // err = clEnqueueWriteBuffer(
-  //   ocl.queue, ocl.cells, CL_TRUE, 0,
-  //   sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
-  // checkError(err, "writing cells data", __LINE__);
 
   accelerate_flow(params, cells, obstacles, ocl);
-  rebound(params, cells, tmp_cells, obstacles, &tt, av_vels, ocl);
+  prop_rbd_col(params, cells, tmp_cells, obstacles, tt, av_vels, ocl);
   reduce(params, tt, ocl);
-
-  // Read tmp_cells from device
-  // err = clEnqueueReadBuffer(
-  //   ocl.queue, ocl.tmp_cells, CL_TRUE, 0,
-  //   sizeof(t_speed) * params.nx * params.ny, cells, 0, NULL, NULL);
-  // checkError(err, "reading tmp_cells data", __LINE__);
-
-
-  return av_velocity(params, cells, obstacles, ocl);
 }
 
 int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl)
@@ -296,49 +282,47 @@ int accelerate_flow(const t_param params, t_speed* cells, int* obstacles, t_ocl 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.accelerate_flow,
                                1, NULL, global, NULL, 0, NULL, NULL);
   checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
-
-  // Wait for kernel to finish
-  err = clFinish(ocl.queue);
-  checkError(err, "waiting for accelerate_flow kernel", __LINE__);
+  // err = clFinish(ocl.queue);
+  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
 
-int rebound(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int* tt, float* av_vels, t_ocl ocl)
+int prop_rbd_col(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles, int tt, float* av_vels, t_ocl ocl)
 {
   cl_int err;
 
   // Set kernel arguments
-  err = clSetKernelArg(ocl.rebound, 0, sizeof(cl_mem), &ocl.cells);
-  checkError(err, "setting rebound arg 0", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 1, sizeof(cl_mem), &ocl.tmp_cells);
-  checkError(err, "setting rebound arg 1", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 2, sizeof(cl_mem), &ocl.obstacles);
-  checkError(err, "setting rebound arg 2", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 3, sizeof(cl_int), &params.nx);
-  checkError(err, "setting rebound arg 3", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 4, sizeof(cl_int), &params.ny);
-  checkError(err, "setting rebound arg 4", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 5, sizeof(cl_float), &params.omega);
-  checkError(err, "setting rebound arg 5", __LINE__);
-  err = clSetKernelArg(ocl.rebound, 6, sizeof(cl_int), &tt);
-  checkError(err, "setting rebound arg 5", __LINE__); 
-  err = clSetKernelArg(ocl.rebound, 7, sizeof(cl_mem), &ocl.av_partial_sums);
-  checkError(err, "setting rebound arg 7", __LINE__); 
-  err = clSetKernelArg(ocl.rebound, 8, sizeof(float) * params.nx, NULL);
-  checkError(err, "setting rebound arg 7", __LINE__); 
+  err = clSetKernelArg(ocl.prop_rbd_col, 0, sizeof(cl_mem), &ocl.cells);
+  checkError(err, "setting prop_rbd_col arg 0", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 1, sizeof(cl_mem), &ocl.tmp_cells);
+  checkError(err, "setting prop_rbd_col arg 1", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 2, sizeof(cl_mem), &ocl.obstacles);
+  checkError(err, "setting prop_rbd_col arg 2", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 3, sizeof(cl_int), &params.nx);
+  checkError(err, "setting prop_rbd_col arg 3", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 4, sizeof(cl_int), &params.ny);
+  checkError(err, "setting prop_rbd_col arg 4", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 5, sizeof(cl_float), &params.omega);
+  checkError(err, "setting prop_rbd_col arg 5", __LINE__);
+  err = clSetKernelArg(ocl.prop_rbd_col, 6, sizeof(cl_int), &tt);
+  checkError(err, "setting prop_rbd_col arg 5", __LINE__); 
+  err = clSetKernelArg(ocl.prop_rbd_col, 7, sizeof(cl_mem), &ocl.av_partial_sums);
+  checkError(err, "setting prop_rbd_col arg 7", __LINE__); 
+  err = clSetKernelArg(ocl.prop_rbd_col, 8, sizeof(float) * params.nx * 1, NULL);
+  checkError(err, "setting prop_rbd_col arg 7", __LINE__);   
 
 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
   size_t local[2]  = {params.nx, 1};
-  err = clEnqueueNDRangeKernel(ocl.queue, ocl.rebound,
-                               2, NULL, global, local, 0, NULL, NULL);
-  checkError(err, "enqueueing rebound kernel", __LINE__);
+   // size_t local[2]  = {1, 1};
 
-  // Wait for kernel to finish
-  err = clFinish(ocl.queue);
-  checkError(err, "waiting for rebound kernel", __LINE__);
+  err = clEnqueueNDRangeKernel(ocl.queue, ocl.prop_rbd_col,
+                               2, NULL, global, local, 0, NULL, NULL);
+  checkError(err, "enqueueing prop_rbd_col kernel", __LINE__);
+  // err = clFinish(ocl.queue);
+  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
@@ -348,7 +332,6 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   cl_int err;
   int work_group_size = params.ny / 1;
 
-
   // Set kernel arguments
   err = clSetKernelArg(ocl.reduce, 0, sizeof(cl_mem), &ocl.av_partial_sums);
   checkError(err, "setting reduce arg 0", __LINE__);
@@ -357,70 +340,19 @@ void reduce(const t_param params, int tt, t_ocl ocl)
   err = clSetKernelArg(ocl.reduce, 2, sizeof(cl_int), &tt);
   checkError(err, "setting reduce arg 2", __LINE__);
   err = clSetKernelArg(ocl.reduce, 3, sizeof(cl_int), &params.tot_cells);
-  checkError(err, "setting reduce arg 2", __LINE__);
+  checkError(err, "setting reduce arg 2", __LINE__);  
   err = clSetKernelArg(ocl.reduce, 4, sizeof(float) * work_group_size, NULL);
   checkError(err, "setting reduce arg 2", __LINE__);
 
-  // Enqueue kernel
-  size_t global[1] = {params.ny};
+
+  //Enqueue kernel
+  size_t global[1] = {work_group_size};
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.reduce,
                                1, NULL, global, NULL, 0, NULL, NULL);
   checkError(err, "enqueueing reduce kernel", __LINE__);
 
-  // Wait for kernel to finish
-  err = clFinish(ocl.queue);
-  checkError(err, "waiting for reduce kernel", __LINE__);
-}
+    // err = clFinish(ocl.queue);
 
-float av_velocity(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl)
-{
-  int    tot_cells = 0;  /* no. of cells used in calculation */
-  float tot_u;          /* accumulated magnitudes of velocity for each cell */
-
-  /* initialise */
-  tot_u = 0.0;
-
-  /* loop over all non-blocked cells */
-  for (int ii = 0; ii < params.ny; ii++)
-  {
-    for (int jj = 0; jj < params.nx; jj++)
-    {
-      /* ignore occupied cells */
-      if (!obstacles[ii * params.nx + jj])
-      {
-        /* local density total */
-        float local_density = 0.0;
-
-        for (int kk = 0; kk < NSPEEDS; kk++)
-        {
-          local_density += cells[ii * params.nx + jj].speeds[kk];
-        }
-
-        /* x-component of velocity */
-        float u_x = (cells[ii * params.nx + jj].speeds[1]
-                      + cells[ii * params.nx + jj].speeds[5]
-                      + cells[ii * params.nx + jj].speeds[8]
-                      - (cells[ii * params.nx + jj].speeds[3]
-                         + cells[ii * params.nx + jj].speeds[6]
-                         + cells[ii * params.nx + jj].speeds[7]))
-                     / local_density;
-        /* compute y velocity component */
-        float u_y = (cells[ii * params.nx + jj].speeds[2]
-                      + cells[ii * params.nx + jj].speeds[5]
-                      + cells[ii * params.nx + jj].speeds[6]
-                      - (cells[ii * params.nx + jj].speeds[4]
-                         + cells[ii * params.nx + jj].speeds[7]
-                         + cells[ii * params.nx + jj].speeds[8]))
-                     / local_density;
-        /* accumulate the norm of x- and y- velocity components */
-        tot_u += sqrt((u_x * u_x) + (u_y * u_y));
-        /* increase counter of inspected cells */
-        ++tot_cells;
-      }
-    }
-  }
-
-  return tot_u / (float)tot_cells;
 }
 
 int initialise(const char* paramfile, const char* obstaclefile,
@@ -635,8 +567,8 @@ int initialise(const char* paramfile, const char* obstaclefile,
   // Create OpenCL kernels
   ocl->accelerate_flow = clCreateKernel(ocl->program, "accelerate_flow", &err);
   checkError(err, "creating accelerate_flow kernel", __LINE__);
-  ocl->rebound = clCreateKernel(ocl->program, "rebound", &err);
-  checkError(err, "creating rebound kernel", __LINE__);  
+  ocl->prop_rbd_col = clCreateKernel(ocl->program, "prop_rbd_col", &err);
+  checkError(err, "creating prop_rbd_col kernel", __LINE__);  
   ocl->reduce = clCreateKernel(ocl->program, "reduce", &err);
   checkError(err, "creating reduce kernel", __LINE__);
 
@@ -644,15 +576,15 @@ int initialise(const char* paramfile, const char* obstaclefile,
   // LOOK AT CL_MEM_READ_WRITE!! only wirte or read
 
   ocl->cells = clCreateBuffer(
-    ocl->context, CL_MEM_READ_WRITE,
+    ocl->context, CL_MEM_WRITE_ONLY,
     sizeof(t_speed) * params->nx * params->ny, NULL, &err);
   checkError(err, "creating cells buffer", __LINE__);
   ocl->tmp_cells = clCreateBuffer(
-    ocl->context, CL_MEM_READ_WRITE,
+    ocl->context, CL_MEM_READ_ONLY,
     sizeof(t_speed) * params->nx * params->ny, NULL, &err);
   checkError(err, "creating tmp_cells buffer", __LINE__);
   ocl->obstacles = clCreateBuffer(
-    ocl->context, CL_MEM_READ_WRITE,
+    ocl->context, CL_MEM_READ_ONLY,
     sizeof(cl_int) * params->nx * params->ny, NULL, &err);
   checkError(err, "creating obstacles buffer", __LINE__);
   ocl->av_partial_sums = clCreateBuffer(
@@ -690,12 +622,63 @@ int finalise(const t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr
   clReleaseMemObject(ocl.tmp_cells);
   clReleaseMemObject(ocl.obstacles);
   clReleaseKernel(ocl.accelerate_flow);
-  clReleaseKernel(ocl.rebound);
+  clReleaseKernel(ocl.prop_rbd_col);
   clReleaseProgram(ocl.program);
   clReleaseCommandQueue(ocl.queue);
   clReleaseContext(ocl.context);
 
   return EXIT_SUCCESS;
+}
+
+float av_velocity(const t_param params, t_speed* cells, int* obstacles, t_ocl ocl)
+{
+  int    tot_cells = 0;  /* no. of cells used in calculation */
+  float tot_u;          /* accumulated magnitudes of velocity for each cell */
+
+  /* initialise */
+  tot_u = 0.0;
+
+  /* loop over all non-blocked cells */
+  for (int ii = 0; ii < params.ny; ii++)
+  {
+    for (int jj = 0; jj < params.nx; jj++)
+    {
+      /* ignore occupied cells */
+      if (!obstacles[ii * params.nx + jj])
+      {
+        /* local density total */
+        float local_density = 0.0;
+
+        for (int kk = 0; kk < NSPEEDS; kk++)
+        {
+          local_density += cells[ii * params.nx + jj].speeds[kk];
+        }
+
+        /* x-component of velocity */
+        float u_x = (cells[ii * params.nx + jj].speeds[1]
+                      + cells[ii * params.nx + jj].speeds[5]
+                      + cells[ii * params.nx + jj].speeds[8]
+                      - (cells[ii * params.nx + jj].speeds[3]
+                         + cells[ii * params.nx + jj].speeds[6]
+                         + cells[ii * params.nx + jj].speeds[7]))
+                     / local_density;
+        /* compute y velocity component */
+        float u_y = (cells[ii * params.nx + jj].speeds[2]
+                      + cells[ii * params.nx + jj].speeds[5]
+                      + cells[ii * params.nx + jj].speeds[6]
+                      - (cells[ii * params.nx + jj].speeds[4]
+                         + cells[ii * params.nx + jj].speeds[7]
+                         + cells[ii * params.nx + jj].speeds[8]))
+                     / local_density;
+        /* accumulate the norm of x- and y- velocity components */
+        tot_u += sqrt((u_x * u_x) + (u_y * u_y));
+        /* increase counter of inspected cells */
+        ++tot_cells;
+      }
+    }
+  }
+
+  return tot_u / (float)tot_cells;
 }
 
 
@@ -891,4 +874,149 @@ cl_device_id selectOpenCLDevice()
   printf("Selected OpenCL device:\n-> %s (index=%d)\n\n", name, device_index);
 
   return devices[device_index];
+}
+
+
+
+void clPrintDevInfo(cl_device_id device) {
+  // char device_string[1024];
+
+  // // CL_DEVICE_NAME
+  // clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(device_string), &device_string, NULL);
+  // printf("  CL_DEVICE_NAME: \t\t\t%s\n", device_string);
+
+  // // CL_DEVICE_VENDOR
+  // clGetDeviceInfo(device, CL_DEVICE_VENDOR, sizeof(device_string), &device_string, NULL);
+  // printf("  CL_DEVICE_VENDOR: \t\t\t%s\n", device_string);
+
+  // // CL_DRIVER_VERSION
+  // clGetDeviceInfo(device, CL_DRIVER_VERSION, sizeof(device_string), &device_string, NULL);
+  // printf("  CL_DRIVER_VERSION: \t\t\t%s\n", device_string);
+
+  // // CL_DEVICE_INFO
+  // cl_device_type type;
+  // clGetDeviceInfo(device, CL_DEVICE_TYPE, sizeof(type), &type, NULL);
+  // if( type & CL_DEVICE_TYPE_CPU )
+  //   printf("  CL_DEVICE_TYPE:\t\t\t%s\n", "CL_DEVICE_TYPE_CPU");
+  // if( type & CL_DEVICE_TYPE_GPU )
+  //   printf("  CL_DEVICE_TYPE:\t\t\t%s\n", "CL_DEVICE_TYPE_GPU");
+  // if( type & CL_DEVICE_TYPE_ACCELERATOR )
+  //   printf("  CL_DEVICE_TYPE:\t\t\t%s\n", "CL_DEVICE_TYPE_ACCELERATOR");
+  // if( type & CL_DEVICE_TYPE_DEFAULT )
+  //   printf("  CL_DEVICE_TYPE:\t\t\t%s\n", "CL_DEVICE_TYPE_DEFAULT");
+
+  // // CL_DEVICE_MAX_COMPUTE_UNITS
+  // cl_uint compute_units;
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(compute_units), &compute_units, NULL);
+  // printf("  CL_DEVICE_MAX_COMPUTE_UNITS:\t\t%u\n", compute_units);
+
+  // // CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS
+  // size_t workitem_dims;
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, sizeof(workitem_dims), &workitem_dims, NULL);
+  // printf("  CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS:\t%u\n", workitem_dims);
+
+  // // CL_DEVICE_MAX_WORK_ITEM_SIZES
+  // size_t workitem_size[3];
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_SIZES, sizeof(workitem_size), &workitem_size, NULL);
+  // printf("  CL_DEVICE_MAX_WORK_ITEM_SIZES:\t%u / %u / %u \n", workitem_size[0], workitem_size[1], workitem_size[2]);
+
+  // // CL_DEVICE_MAX_WORK_GROUP_SIZE
+  // size_t workgroup_size;
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(workgroup_size), &workgroup_size, NULL);
+  // printf("  CL_DEVICE_MAX_WORK_GROUP_SIZE:\t%u\n", workgroup_size);
+
+  // // CL_DEVICE_MAX_CLOCK_FREQUENCY
+  // cl_uint clock_frequency;
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_CLOCK_FREQUENCY, sizeof(clock_frequency), &clock_frequency, NULL);
+  // printf("  CL_DEVICE_MAX_CLOCK_FREQUENCY:\t%u MHz\n", clock_frequency);
+
+  // // CL_DEVICE_ADDRESS_BITS
+  // cl_uint addr_bits;
+  // clGetDeviceInfo(device, CL_DEVICE_ADDRESS_BITS, sizeof(addr_bits), &addr_bits, NULL);
+  // printf("  CL_DEVICE_ADDRESS_BITS:\t\t%u\n", addr_bits);
+
+  // // CL_DEVICE_MAX_MEM_ALLOC_SIZE
+  // cl_ulong max_mem_alloc_size;
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(max_mem_alloc_size), &max_mem_alloc_size, NULL);
+  // printf("  CL_DEVICE_MAX_MEM_ALLOC_SIZE:\t\t%u MByte\n", (unsigned int)(max_mem_alloc_size / (1024 * 1024)));
+
+  // // CL_DEVICE_GLOBAL_MEM_SIZE
+  // cl_ulong mem_size;
+  // clGetDeviceInfo(device, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(mem_size), &mem_size, NULL);
+  // printf("  CL_DEVICE_GLOBAL_MEM_SIZE:\t\t%u MByte\n", (unsigned int)(mem_size / (1024 * 1024)));
+
+  // // CL_DEVICE_ERROR_CORRECTION_SUPPORT
+  // cl_bool error_correction_support;
+  // clGetDeviceInfo(device, CL_DEVICE_ERROR_CORRECTION_SUPPORT, sizeof(error_correction_support), &error_correction_support, NULL);
+  // printf("  CL_DEVICE_ERROR_CORRECTION_SUPPORT:\t%s\n", error_correction_support == CL_TRUE ? "yes" : "no");
+
+  // // CL_DEVICE_LOCAL_MEM_TYPE
+  // cl_device_local_mem_type local_mem_type;
+  // clGetDeviceInfo(device, CL_DEVICE_LOCAL_MEM_TYPE, sizeof(local_mem_type), &local_mem_type, NULL);
+  // printf("  CL_DEVICE_LOCAL_MEM_TYPE:\t\t%s\n", local_mem_type == 1 ? "local" : "global");
+
+  // // CL_DEVICE_LOCAL_MEM_SIZE
+  // clGetDeviceInfo(device, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(mem_size), &mem_size, NULL);
+  // printf("  CL_DEVICE_LOCAL_MEM_SIZE:\t\t%u KByte\n", (unsigned int)(mem_size / 1024));
+
+  // // CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, sizeof(mem_size), &mem_size, NULL);
+  // printf("  CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE:\t%u KByte\n", (unsigned int)(mem_size / 1024));
+
+  // // CL_DEVICE_QUEUE_PROPERTIES
+  // cl_command_queue_properties queue_properties;
+  // clGetDeviceInfo(device, CL_DEVICE_QUEUE_PROPERTIES, sizeof(queue_properties), &queue_properties, NULL);
+  // if( queue_properties & CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE )
+  //   printf("  CL_DEVICE_QUEUE_PROPERTIES:\t\t%s\n", "CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE");
+  // if( queue_properties & CL_QUEUE_PROFILING_ENABLE )
+  //   printf("  CL_DEVICE_QUEUE_PROPERTIES:\t\t%s\n", "CL_QUEUE_PROFILING_ENABLE");
+
+  // // CL_DEVICE_IMAGE_SUPPORT
+  // cl_bool image_support;
+  // clGetDeviceInfo(device, CL_DEVICE_IMAGE_SUPPORT, sizeof(image_support), &image_support, NULL);
+  // printf("  CL_DEVICE_IMAGE_SUPPORT:\t\t%u\n", image_support);
+
+  // // CL_DEVICE_MAX_READ_IMAGE_ARGS
+  // cl_uint max_read_image_args;
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_READ_IMAGE_ARGS, sizeof(max_read_image_args), &max_read_image_args, NULL);
+  // printf("  CL_DEVICE_MAX_READ_IMAGE_ARGS:\t%u\n", max_read_image_args);
+
+  // // CL_DEVICE_MAX_WRITE_IMAGE_ARGS
+  // cl_uint max_write_image_args;
+  // clGetDeviceInfo(device, CL_DEVICE_MAX_WRITE_IMAGE_ARGS, sizeof(max_write_image_args), &max_write_image_args, NULL);
+  // printf("  CL_DEVICE_MAX_WRITE_IMAGE_ARGS:\t%u\n", max_write_image_args);
+
+  // // CL_DEVICE_IMAGE2D_MAX_WIDTH, CL_DEVICE_IMAGE2D_MAX_HEIGHT, CL_DEVICE_IMAGE3D_MAX_WIDTH, CL_DEVICE_IMAGE3D_MAX_HEIGHT, CL_DEVICE_IMAGE3D_MAX_DEPTH
+  // size_t szMaxDims[5];
+  // printf("\n  CL_DEVICE_IMAGE <dim>");
+  // clGetDeviceInfo(device, CL_DEVICE_IMAGE2D_MAX_WIDTH, sizeof(size_t), &szMaxDims[0], NULL);
+  // printf("\t\t\t2D_MAX_WIDTH\t %u\n", szMaxDims[0]);
+  // clGetDeviceInfo(device, CL_DEVICE_IMAGE2D_MAX_HEIGHT, sizeof(size_t), &szMaxDims[1], NULL);
+  // printf("\t\t\t\t\t2D_MAX_HEIGHT\t %u\n", szMaxDims[1]);
+  // clGetDeviceInfo(device, CL_DEVICE_IMAGE3D_MAX_WIDTH, sizeof(size_t), &szMaxDims[2], NULL);
+  // printf("\t\t\t\t\t3D_MAX_WIDTH\t %u\n", szMaxDims[2]);
+  // clGetDeviceInfo(device, CL_DEVICE_IMAGE3D_MAX_HEIGHT, sizeof(size_t), &szMaxDims[3], NULL);
+  // printf("\t\t\t\t\t3D_MAX_HEIGHT\t %u\n", szMaxDims[3]);
+  // clGetDeviceInfo(device, CL_DEVICE_IMAGE3D_MAX_DEPTH, sizeof(size_t), &szMaxDims[4], NULL);
+  // printf("\t\t\t\t\t3D_MAX_DEPTH\t %u\n", szMaxDims[4]);
+
+  // // CL_DEVICE_PREFERRED_VECTOR_WIDTH_<type>
+  // printf("  CL_DEVICE_PREFERRED_VECTOR_WIDTH_<t>\t");
+  // cl_uint vec_width [6];
+  // clGetDeviceInfo(device, CL_DEVICE_PREFERRED_VECTOR_WIDTH_CHAR, sizeof(cl_uint), &vec_width[0], NULL);
+  // clGetDeviceInfo(device, CL_DEVICE_PREFERRED_VECTOR_WIDTH_SHORT, sizeof(cl_uint), &vec_width[1], NULL);
+  // clGetDeviceInfo(device, CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), &vec_width[2], NULL);
+  // clGetDeviceInfo(device, CL_DEVICE_PREFERRED_VECTOR_WIDTH_LONG, sizeof(cl_uint), &vec_width[3], NULL);
+  // clGetDeviceInfo(device, CL_DEVICE_PREFERRED_VECTOR_WIDTH_FLOAT, sizeof(cl_uint), &vec_width[4], NULL);
+  // clGetDeviceInfo(device, CL_DEVICE_PREFERRED_VECTOR_WIDTH_DOUBLE, sizeof(cl_uint), &vec_width[5], NULL);
+  // printf("CHAR %u, SHORT %u, INT %u, FLOAT %u, DOUBLE %u\n\n\n",
+  //  vec_width[0], vec_width[1], vec_width[2], vec_width[3], vec_width[4]);
+
+
+  //   printf("-------------------------NEW Fucntion----------------------\n\n");
+
+
+
+
+
 }
