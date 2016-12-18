@@ -46,12 +46,11 @@ kernel void accelerate_flow(global write_only t_speed* cells,
 
 // -----------------------------------------------------------------------------------------
 
-// MAKE VOLATILE**********************
 kernel void prop_rbd_col(global write_only t_speed* cells,
                     global read_only t_speed* tmp_cells,
                     global read_only int* obstacles,
                     int nx, int ny, float omega, int tt, 
-                    global float* av_partial_sums, local float* av_local_sums)
+                    global float* av_partial_sums, local volatile float* av_local_sums)
 {
   float tot_u = 0.0;    /* accumulated magnitudes of velocity for each cell */
   const float d1 = 1 / 36.0;
