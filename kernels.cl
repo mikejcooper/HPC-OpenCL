@@ -1,6 +1,8 @@
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 #define NSPEEDS         9
+#define blockSize 128
+
 
 typedef struct
 {
@@ -172,12 +174,22 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
   av_local_sums[local_id] = tot_u;
   barrier(CLK_LOCAL_MEM_FENCE);
 
-  for (int i = 0; i < num_wrk_items; i *= 2) {  
-      if ((local_id % (2 * i)) == 0) {
-        av_local_sums[local_id] += av_local_sums[local_id + i]; 
+  for (int i = num_wrk_items / 2; i < 32; i >>= 1) {  
+      if (local_id < i){
+          av_local_sums[local_id] += av_local_sums[local_id + i]; 
       }
       barrier(CLK_LOCAL_MEM_FENCE);
-  }      
+  }   
+
+  if (tid < 32)
+    {
+        if (blockSize >=  64) { av_local_sums[local_id] += av_local_sums[local_id + 32]; }
+        if (blockSize >=  32) { av_local_sums[local_id] += av_local_sums[local_id + 16]; }
+        if (blockSize >=  16) { av_local_sums[local_id] += av_local_sums[local_id +  8]; }
+        if (blockSize >=   8) { av_local_sums[local_id] += av_local_sums[local_id +  4]; }
+        if (blockSize >=   4) { av_local_sums[local_id] += av_local_sums[local_id +  2]; }
+        if (blockSize >=   2) { av_local_sums[local_id] += av_local_sums[local_id +  1]; }
+    }   
 
   if (local_id == 0){
       av_partial_sums[group_id] = av_local_sums[0];                               
