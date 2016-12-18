@@ -194,6 +194,8 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
 }
 
+// ---------------- REDUCTION v3-------------------
+
 kernel void reduce(global float* av_partial_sums,
                    global float* av_vels, int tt, int tot_cells, local float* shared_mem)
 {
@@ -237,6 +239,9 @@ kernel void reduce(global float* av_partial_sums,
   }
 }
 
+
+// ---------------- REDUCTION v2-------------------
+
 // kernel void reduce(global float* av_partial_sums,
 //                    global float* av_vels, int tt, int tot_cells, local float* shared_mem)
 // {
@@ -254,4 +259,21 @@ kernel void reduce(global float* av_partial_sums,
 //   if (global_id == 0){
 //       av_vels[tt] = av_partial_sums[0]/tot_cells;                               
 //   }
+// }
+
+// ---------------- REDUCTION v1-------------------
+
+// kernel void reduce(global float* av_partial_sums,
+//                    global float* av_vels, int tt, int tot_cells)
+// {
+//   int global_size  = get_global_size(0);    // number of items the work group (number of columns)              
+//   int global_id    = get_global_id(0);   // ID of specific coloumn in the work group 
+
+//   if (global_id == 0){
+//     float total = 0.0f;
+//     for (int i=0; i<global_size; i++) {        
+//       total += av_partial_sums[i];             
+//     }                                     
+//     av_vels[tt] = total/tot_cells;    
+//   } 
 // }
