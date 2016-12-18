@@ -4,23 +4,23 @@
 #define blockSize 128
 #define nIsPow2 1
 
-void reduce_local(local float* shared_mem, int id, int work_items);
+void reduce_local(local double* shared_mem, int id, int work_items);
 
 
 typedef struct
 {
-  float speeds[NSPEEDS];
+  double speeds[NSPEEDS];
 } t_speed;
 
 kernel void accelerate_flow(global write_only t_speed* cells,
                             global read_only int* obstacles,
                             int nx, int ny,
-                            float density, float accel)
+                            double density, double accel)
 {
 
  /* compute weighting factors */
-  float w2 = density * accel / 36.0f;
-  float w1 = 4 * w2;
+  double w2 = density * accel / 36.0f;
+  double w1 = 4 * w2;
 
 
   /* modify the 2nd row of the grid */
@@ -52,11 +52,11 @@ kernel void accelerate_flow(global write_only t_speed* cells,
 kernel void prop_rbd_col(global write_only t_speed* cells,
                     global read_only t_speed* tmp_cells,
                     global read_only int* obstacles,
-                    int nx, int ny, float omega, int tt, 
-                    global float* av_partial_sums, local float* av_local_sums)
+                    int nx, int ny, double omega, int tt, 
+                    global double* av_partial_sums, local double* av_local_sums)
 {
-  float tot_u = 0.0;    /* accumulated magnitudes of velocity for each cell */
-  const float d1 = 1 / 36.0;
+  double tot_u = 0.0;    /* accumulated magnitudes of velocity for each cell */
+  const double d1 = 1 / 36.0;
 
   /* get column and row indices */
   int jj = get_global_id(0);
@@ -99,7 +99,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
       {
 
         /* compute local density total */
-        float local_density = 0.0;
+        double local_density = 0.0;
         local_density += cells[ii * nx + jj].speeds[0];
         local_density += cells[ii * nx + x_e].speeds[3];
         local_density += cells[y_n * nx + jj].speeds[4];
@@ -111,9 +111,9 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
         local_density += cells[y_s * nx + x_e].speeds[6];
 
 
-        float local_density_invert = 1 / local_density;
+        double local_density_invert = 1 / local_density;
         /* compute x velocity component */
-        float u_x = (cells[ii * nx + x_w].speeds[1]
+        double u_x = (cells[ii * nx + x_w].speeds[1]
                       + cells[y_s * nx + x_w].speeds[5]
                       + cells[y_n * nx + x_w].speeds[8]
                       - (cells[ii * nx + x_e].speeds[3]
@@ -121,7 +121,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
                          + cells[y_n * nx + x_e].speeds[7]))
                      * local_density_invert;
         /* compute y velocity component */
-        float u_y = (cells[y_s * nx + jj].speeds[2]
+        double u_y = (cells[y_s * nx + jj].speeds[2]
                       + cells[y_s * nx + x_w].speeds[5]
                       + cells[y_s * nx + x_e].speeds[6]
                       - (cells[y_n * nx + jj].speeds[4]
@@ -192,8 +192,8 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
 // ---------------- REDUCTION v3-------------------
 
-kernel void reduce(global float* av_partial_sums,
-                   global float* av_vels, int tt, int tot_cells, local float* shared_mem)
+kernel void reduce(global double* av_partial_sums,
+                   global double* av_vels, int tt, int tot_cells, local double* shared_mem)
 {
   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
@@ -206,11 +206,11 @@ kernel void reduce(global float* av_partial_sums,
   }
 }
 
-void reduce_local(local float* shared_mem, int id, int group_size){
+void reduce_local(local double* shared_mem, int id, int group_size){
   barrier(CLK_LOCAL_MEM_FENCE);
   
   // if (id == 0){
-  //   float total = 0.0f;
+  //   double total = 0.0f;
   //   for (int i=0; i<group_size; i++) {        
   //     total += shared_mem[i];             
   //   }                                     
@@ -218,7 +218,7 @@ void reduce_local(local float* shared_mem, int id, int group_size){
   // } 
 
   // #pragma unroll 1
-  for (int i = group_size / 2; i > 32; i >>= 1) {  
+  for (int i = group_size / 2; i > 0; i >>= 1) {  
       if (id < i){
           shared_mem[id] += shared_mem[id + i]; 
       }
@@ -230,27 +230,27 @@ void reduce_local(local float* shared_mem, int id, int group_size){
   // if (blockSize >= 256) { if (id < 128) { shared_mem[id] += shared_mem[id + 128]; } barrier(CLK_LOCAL_MEM_FENCE); }
   // if (blockSize >= 128) { if (id <  64) { shared_mem[id] += shared_mem[id +  64]; } barrier(CLK_LOCAL_MEM_FENCE); }
     
-  if (id < 32)
-  {
-      if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=  32) { shared_mem[id] += shared_mem[id + 16]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=  16) { shared_mem[id] += shared_mem[id +  8]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=   8) { shared_mem[id] += shared_mem[id +  4]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=   4) { shared_mem[id] += shared_mem[id +  2]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=   2) { shared_mem[id] += shared_mem[id +  1]; }
-  }
+  // if (id < 32)
+  // {
+  //     if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
+  //     barrier(CLK_LOCAL_MEM_FENCE);
+  //     if (blockSize >=  32) { shared_mem[id] += shared_mem[id + 16]; }
+  //     barrier(CLK_LOCAL_MEM_FENCE);
+  //     if (blockSize >=  16) { shared_mem[id] += shared_mem[id +  8]; }
+  //     barrier(CLK_LOCAL_MEM_FENCE);
+  //     if (blockSize >=   8) { shared_mem[id] += shared_mem[id +  4]; }
+  //     barrier(CLK_LOCAL_MEM_FENCE);
+  //     if (blockSize >=   4) { shared_mem[id] += shared_mem[id +  2]; }
+  //     barrier(CLK_LOCAL_MEM_FENCE);
+  //     if (blockSize >=   2) { shared_mem[id] += shared_mem[id +  1]; }
+  // }
 }
 
 
 // ---------------- REDUCTION v2-------------------
 
-// kernel void reduce(global float* av_partial_sums,
-//                    global float* av_vels, int tt, int tot_cells, local float* shared_mem)
+// kernel void reduce(global double* av_partial_sums,
+//                    global double* av_vels, int tt, int tot_cells, local double* shared_mem)
 // {
 //   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
 //   int global_id    = get_global_id(0);   // ID of work-item
@@ -270,14 +270,14 @@ void reduce_local(local float* shared_mem, int id, int group_size){
 
 // ---------------- REDUCTION v1-------------------
 
-// kernel void reduce(global float* av_partial_sums,
-//                    global float* av_vels, int tt, int tot_cells)
+// kernel void reduce(global double* av_partial_sums,
+//                    global double* av_vels, int tt, int tot_cells)
 // {
 //   int global_size  = get_global_size(0);    // number of items the work group (number of columns)              
 //   int global_id    = get_global_id(0);   // ID of specific coloumn in the work group 
 
 //   if (global_id == 0){
-//     float total = 0.0f;
+//     double total = 0.0f;
 //     for (int i=0; i<global_size; i++) {        
 //       total += av_partial_sums[i];             
 //     }                                     
