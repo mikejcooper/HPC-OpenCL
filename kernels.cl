@@ -181,7 +181,7 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
       barrier(CLK_LOCAL_MEM_FENCE);
   }   
 
-  if (tid < 32)
+  if (local_id < 32)
     {
         if (blockSize >=  64) { av_local_sums[local_id] += av_local_sums[local_id + 32]; }
         if (blockSize >=  32) { av_local_sums[local_id] += av_local_sums[local_id + 16]; }
