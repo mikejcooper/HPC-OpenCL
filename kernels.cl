@@ -214,28 +214,12 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
 // -----------------REDUCTION ----------------------------------------
 
   // #pragma unroll 1
-  for (int i = num_wrk_items / 2; i > 32; i >>= 1) {  
+  for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
       barrier(CLK_LOCAL_MEM_FENCE);
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i];
       }
   }
-
-  if (local_id < 32)
-  {
-      if (blockSize >=  64) { av_local_sums[local_id] += av_local_sums[local_id + 32]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=  32) { av_local_sums[local_id] += av_local_sums[local_id + 16]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=  16) { av_local_sums[local_id] += av_local_sums[local_id +  8]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=   8) { av_local_sums[local_id] += av_local_sums[local_id +  4]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=   4) { av_local_sums[local_id] += av_local_sums[local_id +  2]; }
-      barrier(CLK_LOCAL_MEM_FENCE);
-      if (blockSize >=   2) { av_local_sums[local_id] += av_local_sums[local_id +  1]; }
-  }
-
 
   if (local_id == 0){
       av_partial_sums[group_id] = av_local_sums[0];                               
@@ -266,25 +250,36 @@ kernel void reduce(global float* av_partial_sums,
       av_vels[tt] = total/tot_cells;    
     } 
 
+  // #pragma unroll 1
+  // for (int i = group_size / 2; i > 0; i >>= 1) {  
+  //     barrier(CLK_GLOBAL_MEM_FENCE);
+  //     if (global_id < i){
+  //         shared_mem[global_id] += shared_mem[global_id + i];
+  //     }
+  // }
+
+  // if (global_id == 0){
+  //     av_vels[tt] = shared_mem[0]/tot_cells;                               
+  // }
 }
 
 
 
 
-  // if (id < 32)
-  // {
-  //     if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=  32) { shared_mem[id] += shared_mem[id + 16]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=  16) { shared_mem[id] += shared_mem[id +  8]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=   8) { shared_mem[id] += shared_mem[id +  4]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=   4) { shared_mem[id] += shared_mem[id +  2]; }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  //     if (blockSize >=   2) { shared_mem[id] += shared_mem[id +  1]; }
-  // }
+//   if (id < 32)
+//   {
+//       if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
+//       barrier(CLK_LOCAL_MEM_FENCE);
+//       if (blockSize >=  32) { shared_mem[id] += shared_mem[id + 16]; }
+//       barrier(CLK_LOCAL_MEM_FENCE);
+//       if (blockSize >=  16) { shared_mem[id] += shared_mem[id +  8]; }
+//       barrier(CLK_LOCAL_MEM_FENCE);
+//       if (blockSize >=   8) { shared_mem[id] += shared_mem[id +  4]; }
+//       barrier(CLK_LOCAL_MEM_FENCE);
+//       if (blockSize >=   4) { shared_mem[id] += shared_mem[id +  2]; }
+//       barrier(CLK_LOCAL_MEM_FENCE);
+//       if (blockSize >=   2) { shared_mem[id] += shared_mem[id +  1]; }
+//   }
 
 
 
