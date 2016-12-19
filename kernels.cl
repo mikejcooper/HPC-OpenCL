@@ -210,13 +210,12 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
   // reduce_local(av_local_sums, local_id, num_wrk_items);
   
   barrier(CLK_LOCAL_MEM_FENCE);
-  if (local_id == 0){
-    float total = 0.0f;
-    for (int i=0; i<num_wrk_items; i++) {        
-      total += av_local_sums[i];             
-    }                                     
-    av_local_sums[0] = total;    
-  } 
+  for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
+      if (local_id < i){
+          av_local_sums[local_id] += av_local_sums[local_id + i];
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+  }
 
   if (local_id == 0){
       av_partial_sums[group_id] = av_local_sums[0];                               
@@ -263,12 +262,12 @@ void reduce_local(local float* shared_mem, int id, int group_size){
   } 
 
   // // #pragma unroll 1
-  // for (int i = group_size / 2; i > 0; i >>= 1) {  
-  //     if (id < i){
-  //         shared_mem[id] += shared_mem[id + i];
-  //     }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  // }
+  for (int i = group_size / 2; i > 0; i >>= 1) {  
+      if (id < i){
+          shared_mem[id] += shared_mem[id + i];
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+  }
 
   //do reduction in shared mem
   // if (blockSize >= 512) { if (id < 256) { shared_mem[id] += shared_mem[id + 256]; } barrier(CLK_LOCAL_MEM_FENCE); }
