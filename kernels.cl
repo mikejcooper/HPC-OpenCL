@@ -244,21 +244,21 @@ kernel void reduce(global float* av_partial_sums,
 void reduce_local(local float* shared_mem, int id, int group_size){
   barrier(CLK_LOCAL_MEM_FENCE);
   
-  // if (id == 0){
-  //   float total = 0.0f;
-  //   for (int i=0; i<group_size; i++) {        
-  //     total += shared_mem[i];             
-  //   }                                     
-  //   shared_mem[0] = total;    
-  // } 
+  if (id == 0){
+    float total = 0.0f;
+    for (int i=0; i<group_size; i++) {        
+      total += shared_mem[i];             
+    }                                     
+    shared_mem[0] = total;    
+  } 
 
-  // #pragma unroll 1
-  for (int i = group_size / 2; i > 0; i >>= 1) {  
-      if (id < i){
-          shared_mem[id] += shared_mem[id + i];
-      }
-      barrier(CLK_LOCAL_MEM_FENCE);
-  }
+  // // #pragma unroll 1
+  // for (int i = group_size / 2; i > 0; i >>= 1) {  
+  //     if (id < i){
+  //         shared_mem[id] += shared_mem[id + i];
+  //     }
+  //     barrier(CLK_LOCAL_MEM_FENCE);
+  // }
 
   //do reduction in shared mem
   // if (blockSize >= 512) { if (id < 256) { shared_mem[id] += shared_mem[id + 256]; } barrier(CLK_LOCAL_MEM_FENCE); }
