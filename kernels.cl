@@ -182,15 +182,16 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   av_local_sums[local_id] = tot_u;
 
-  // reduce_local(av_local_sums, local_id, num_wrk_items);
   barrier(CLK_LOCAL_MEM_FENCE);
+
+// -----------------REDUCTION ----------------------------------------
 
   // #pragma unroll 1
   for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
+      barrier(CLK_LOCAL_MEM_FENCE);
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i];
       }
-      barrier(CLK_LOCAL_MEM_FENCE);
   }
 
   if (local_id == 0){
@@ -212,12 +213,14 @@ kernel void reduce(global float* av_partial_sums,
   
   barrier(CLK_GLOBAL_MEM_FENCE);
 
+// -----------------REDUCTION ----------------------------------------
+
   // #pragma unroll 1
   for (int i = group_size / 2; i > 0; i >>= 1) {  
+      barrier(CLK_GLOBAL_MEM_FENCE);
       if (global_id < i){
           shared_mem[global_id] += shared_mem[global_id + i];
       }
-      barrier(CLK_GLOBAL_MEM_FENCE);
   }
 
   if (global_id == 0){
