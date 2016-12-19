@@ -182,79 +182,38 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   av_local_sums[local_id] = tot_u;
 
-  // reduce_local(av_local_sums, local_id, num_wrk_items);
+  reduce_local(av_local_sums, local_id, num_wrk_items);
 
-  // Copy from global memory to local memory
-  // localSums[local_id] = input[get_global_id(0)];
-
-  // Loop for computing localSums
-  for (uint stride = num_wrk_items/2; stride>0; stride /=2)
-     {
-      // Waiting for each 2x2 addition into given workgroup
-      barrier(CLK_LOCAL_MEM_FENCE);
-
-      // Divide WorkGroup into 2 parts and add elements 2 by 2
-      // between local_id and local_id + stride
-      if (local_id < stride)
-        av_local_sums[local_id] += av_local_sums[local_id + stride];
-     }
-     
   if (local_id == 0){
       av_partial_sums[group_id] = av_local_sums[0];                               
   }
 
 }
 
-
-
-
-
 // ---------------- REDUCTION v3-------------------
 
-// kernel void reduce(global float* av_partial_sums,
-//                    global float* av_vels, int tt, int tot_cells, local float* shared_mem)
-// {
-//   int num_work_groups  = get_global_size(0);  // # work-items   == # work-groups           
-//   int global_id    = get_global_id(0);   // ID of work-item
-//   shared_mem[global_id] = av_partial_sums[global_id];
-
-//   reduce_local(shared_mem, global_id, num_work_groups);
-
-//   if (global_id == 0){
-//       av_vels[tt] = shared_mem[0]/tot_cells;                               
-//   }
-// }
+kernel void reduce(global float* av_partial_sums,
+                   global float* av_vels, int tt, int tot_cells, local float* shared_mem)
+{
+  int group_size  = get_global_size(0);  // # work-items   == # work-groups           
+  int global_id    = get_global_id(0);   // ID of work-item
+  shared_mem[global_id] = av_partial_sums[global_id];
 
 
+  reduce_local(shared_mem, global_id, group_size);
 
-  kernel void reduce ( global const float *input, 
-                      global float *partialSums,
-                      int tt, int tot_cells,
-             local float *localSums)
- {
-  uint local_id = get_local_id(0);
-  uint group_size = get_local_size(0);
+  // // #pragma unroll 1
+  // for (int i = group_size / 2; i > 0; i >>= 1) {  
+  //     if (id < i){
+  //         shared_mem[global_id] += shared_mem[global_id + i];
+  //     }
+  //     barrier(CLK_LOCAL_MEM_FENCE);
+  // }
 
-  // Copy from global memory to local memory
-  localSums[local_id] = input[get_global_id(0)];
-
-  // Loop for computing localSums
-  for (uint stride = group_size/2; stride>0; stride /=2)
-     {
-      // Waiting for each 2x2 addition into given workgroup
-      barrier(CLK_LOCAL_MEM_FENCE);
-
-      // Divide WorkGroup into 2 parts and add elements 2 by 2
-      // between local_id and local_id + stride
-      if (local_id < stride)
-        localSums[local_id] += localSums[local_id + stride];
-     }
-
-  // Write result into partialSums[nWorkGroups]
-  if (local_id == 0)
-    partialSums[tt] = localSums[0]/tot_cells;
- }          
-
+  if (global_id == 0){
+      av_vels[tt] = shared_mem[0]/tot_cells;                               
+  }
+}
 
 void reduce_local(local float* shared_mem, int id, int group_size){
   barrier(CLK_LOCAL_MEM_FENCE);
@@ -268,7 +227,7 @@ void reduce_local(local float* shared_mem, int id, int group_size){
   } 
 
   // // #pragma unroll 1
-  // for (int i = group_size / 2; i > 32; i >>= 1) {  
+  // for (int i = group_size / 2; i > 0; i >>= 1) {  
   //     if (id < i){
   //         shared_mem[id] += shared_mem[id + i];
   //     }

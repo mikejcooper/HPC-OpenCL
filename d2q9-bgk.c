@@ -107,6 +107,8 @@ typedef struct
   float speeds[NSPEEDS];
 } t_speed;
 
+
+
 /*
 ** function prototypes
 */
