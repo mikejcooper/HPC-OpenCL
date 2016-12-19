@@ -250,17 +250,18 @@ kernel void reduce(global float* av_partial_sums,
       av_vels[tt] = total/tot_cells;    
     } 
 
-  // #pragma unroll 1
-  // for (int i = group_size / 2; i > 0; i >>= 1) {  
-  //     barrier(CLK_GLOBAL_MEM_FENCE);
-  //     if (global_id < i){
-  //         shared_mem[global_id] += shared_mem[global_id + i];
-  //     }
-  // }
-
-  // if (global_id == 0){
-  //     av_vels[tt] = shared_mem[0]/tot_cells;                               
-  // }
+  #pragma unroll 1
+  for (int i = group_size / 2; i > 0; i >>= 1) {  
+      barrier(CLK_GLOBAL_MEM_FENCE);
+      if (global_id < i){
+          shared_mem[global_id] += shared_mem[global_id + i];
+      }
+  }
+  
+  barrier(CLK_GLOBAL_MEM_FENCE);
+  if (global_id == 0){
+      av_vels[tt] = shared_mem[0]/tot_cells;                               
+  }
 }
 
 
