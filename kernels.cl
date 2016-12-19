@@ -4,7 +4,6 @@
 #define blockSize 128
 #define nIsPow2 1
 
-// void reduce_local(local float* shared_mem, int id, int work_items);
 
 typedef struct
 {
@@ -57,8 +56,7 @@ kernel void accelerate_flow(global write_only t_cells* cells,
   }
 }
 
-// -----------------------------------------------------------------------------------------
-//  Add volatile types *****
+
 kernel void prop_rbd_col(global write_only t_cells* cells,
                     global read_only t_cells* tmp_cells,
                     global read_only int* obstacles,
@@ -73,8 +71,6 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
   int jj = get_global_id(0);
   int ii = get_global_id(1);
 
-  // t_cells tmp_cells_local[1] = malloc(sizeof(t_cells) + 9 * sizeof(float))
-
   /* determine indices of axis-direction   neighbours
   ** respecting periodic boundary conditions (wrap around) */
   int y_n = (ii + 1) % ny;
@@ -83,11 +79,6 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
   int x_w = (jj == 0) ? (jj + nx - 1) : (jj - 1);
 
   int index = ii * nx + jj;
-  t_cells tmp_cells_local[1];
-
-  // for(int i = 0; i < NSPEEDS; i++){
-  //   tmp_cells_local[0].speeds[i] = tmp_cells[index].speeds[i];
-  // }
 
 
   /* if the cell contains an obstacle */
@@ -97,15 +88,15 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
       {
         /* called after propagate, so taking values from scratch space
         ** mirroring, and writing into main grid */
-        tmp_cells_local->s0[ii * nx + jj] = cells->s0[ii * nx + jj]; /* central cell, no movement */
-        tmp_cells_local->s1[ii * nx + jj] = cells->s3[ii * nx + x_e]; /* east */
-        tmp_cells_local->s2[ii * nx + jj] = cells->s4[y_n * nx + jj]; /* north */
-        tmp_cells_local->s3[ii * nx + jj] = cells->s1[ii * nx + x_w]; /* west */
-        tmp_cells_local->s4[ii * nx + jj] = cells->s2[y_s * nx + jj]; /* south */
-        tmp_cells_local->s5[ii * nx + jj] = cells->s7[y_n * nx + x_e]; /* north-east */
-        tmp_cells_local->s6[ii * nx + jj] = cells->s8[y_n * nx + x_w]; /* north-west */
-        tmp_cells_local->s7[ii * nx + jj] = cells->s5[y_s * nx + x_w]; /* south-west */
-        tmp_cells_local->s8[ii * nx + jj] = cells->s6[y_s * nx + x_e]; /* south-east */
+        tmp_cells->s0[ii * nx + jj] = cells->s0[ii * nx + jj]; /* central cell, no movement */
+        tmp_cells->s1[ii * nx + jj] = cells->s3[ii * nx + x_e]; /* east */
+        tmp_cells->s2[ii * nx + jj] = cells->s4[y_n * nx + jj]; /* north */
+        tmp_cells->s3[ii * nx + jj] = cells->s1[ii * nx + x_w]; /* west */
+        tmp_cells->s4[ii * nx + jj] = cells->s2[y_s * nx + jj]; /* south */
+        tmp_cells->s5[ii * nx + jj] = cells->s7[y_n * nx + x_e]; /* north-east */
+        tmp_cells->s6[ii * nx + jj] = cells->s8[y_n * nx + x_w]; /* north-west */
+        tmp_cells->s7[ii * nx + jj] = cells->s5[y_s * nx + x_w]; /* south-west */
+        tmp_cells->s8[ii * nx + jj] = cells->s6[y_s * nx + x_e]; /* south-east */
       } 
 // ----------------END--------------------------------------------
       else 
@@ -146,40 +137,40 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
 
         
 
-        tmp_cells_local->s0[ii * nx + jj] = cells->s0[ii * nx + jj]
+        tmp_cells->s0[ii * nx + jj] = cells->s0[ii * nx + jj]
                                                   + omega
                                                   * (local_density * 4.0f * val1 * ( 2.0f - u_sq)
                                                   - cells->s0[ii * nx + jj]);
-        tmp_cells_local->s1[ii * nx + jj] = cells->s1[ii * nx + x_w]
+        tmp_cells->s1[ii * nx + jj] = cells->s1[ii * nx + x_w]
                                                   + omega
                                                   *  (((local_density * val1 * (3.0f * u_x * ( 3.0f * u_x + 2.0f) + 2.0f - u_sq )))
                                                   - cells->s1[ii * nx + x_w]);
-        tmp_cells_local->s3[ii * nx + jj] = cells->s3[ii * nx + x_e]
+        tmp_cells->s3[ii * nx + jj] = cells->s3[ii * nx + x_e]
                                                   + omega
                                                   *  (((local_density * val1 * (3.0f * u_x * (3.0f * u_x - 2.0f) + 2.0f - u_sq )))
                                                   - cells->s3[ii * nx + x_e]);
-        tmp_cells_local->s2[ii * nx + jj] = cells->s2[y_s * nx + jj]
+        tmp_cells->s2[ii * nx + jj] = cells->s2[y_s * nx + jj]
                                                   + omega
                                                   *  (((local_density * val1 * (3.0f * u_y * (3.0f * u_y + 2.0f) + 2.0f - u_sq )))
                                                   - cells->s2[y_s * nx + jj]);
-        tmp_cells_local->s4[ii * nx + jj] = cells->s4[y_n * nx + jj]
+        tmp_cells->s4[ii * nx + jj] = cells->s4[y_n * nx + jj]
                                                   + omega
                                                   *  (((local_density * val1 * (3.0f * u_y * (3.0f * u_y - 2.0f) + 2.0f - u_sq )))
                                                   - cells->s4[y_n * nx + jj]);
-        tmp_cells_local->s5[ii * nx + jj] = cells->s5[y_s * nx + x_w]
+        tmp_cells->s5[ii * nx + jj] = cells->s5[y_s * nx + x_w]
                                                   + omega
                                                   * (((local_density * val2 * (3.0f * (u_x + u_y) * (3.0f * (u_x + u_y) + 2.0f) + 2.0f - u_sq )))
                                                   - cells->s5[y_s * nx + x_w]);
-        tmp_cells_local->s7[ii * nx + jj] = cells->s7[y_n * nx + x_e]
+        tmp_cells->s7[ii * nx + jj] = cells->s7[y_n * nx + x_e]
                                                   + omega
                                                   * (((local_density * val2 * (3.0f * (u_x + u_y) * (3.0f * (u_x + u_y) - 2.0f) + 2.0f - u_sq )))
                                                   - cells->s7[y_n * nx + x_e]);
-        tmp_cells_local->s6[ii * nx + jj] = cells->s6[y_s * nx + x_e]
+        tmp_cells->s6[ii * nx + jj] = cells->s6[y_s * nx + x_e]
                                                   + omega
                                                   * (((local_density * val2 * (3.0f * (u_x - u_y) * (3.0f * (u_x - u_y) - 2.0f) + 2.0f - u_sq )))
                                                   - cells->s6[y_s * nx + x_e]);
         
-        tmp_cells_local->s8[ii * nx + jj] = cells->s8[y_n * nx + x_w]
+        tmp_cells->s8[ii * nx + jj] = cells->s8[y_n * nx + x_w]
                                                   + omega
                                                   * (((local_density * val2 * (3.0f * (u_x - u_y) * (3.0f * (u_x - u_y) + 2.0f) + 2.0f - u_sq )))
                                                   - cells->s8[y_n * nx + x_w]);
@@ -188,18 +179,6 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
         tot_u += sqrt((u_x * u_x) + (u_y * u_y));
   }
 
-    tmp_cells->s0[ii * nx + jj] = tmp_cells_local->s0[ii * nx + jj];
-    tmp_cells->s1[ii * nx + jj] = tmp_cells_local->s1[ii * nx + jj];
-    tmp_cells->s2[ii * nx + jj] = tmp_cells_local->s2[ii * nx + jj];
-    tmp_cells->s3[ii * nx + jj] = tmp_cells_local->s3[ii * nx + jj];
-    tmp_cells->s4[ii * nx + jj] = tmp_cells_local->s4[ii * nx + jj];
-    tmp_cells->s5[ii * nx + jj] = tmp_cells_local->s5[ii * nx + jj];
-    tmp_cells->s6[ii * nx + jj] = tmp_cells_local->s6[ii * nx + jj];
-    tmp_cells->s7[ii * nx + jj] = tmp_cells_local->s7[ii * nx + jj];
-    tmp_cells->s8[ii * nx + jj] = tmp_cells_local->s8[ii * nx + jj];
-    
-
-
   // --------------Local REDUCTION -----------------
 
   int num_wrk_items  = get_local_size(0) * get_local_size(1);   // # work-items in work-group 
@@ -207,12 +186,12 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
   int group_id       = get_num_groups(0) * get_group_id(1) + get_group_id(0);     // ID of work-group
 
   av_local_sums[local_id] = tot_u;
+
   
   barrier(CLK_LOCAL_MEM_FENCE);
 
 // -----------------REDUCTION ----------------------------------------
 
-  // #pragma unroll 1
   for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
       barrier(CLK_LOCAL_MEM_FENCE);
       if (local_id < i){
@@ -247,28 +226,8 @@ kernel void reduce(global float* av_partial_sums,
       av_vels[tt] = total/tot_cells;    
     } 
 
+ 
 }
-
-
-
-
-//   if (id < 32)
-//   {
-//       if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
-//       barrier(CLK_LOCAL_MEM_FENCE);
-//       if (blockSize >=  32) { shared_mem[id] += shared_mem[id + 16]; }
-//       barrier(CLK_LOCAL_MEM_FENCE);
-//       if (blockSize >=  16) { shared_mem[id] += shared_mem[id +  8]; }
-//       barrier(CLK_LOCAL_MEM_FENCE);
-//       if (blockSize >=   8) { shared_mem[id] += shared_mem[id +  4]; }
-//       barrier(CLK_LOCAL_MEM_FENCE);
-//       if (blockSize >=   4) { shared_mem[id] += shared_mem[id +  2]; }
-//       barrier(CLK_LOCAL_MEM_FENCE);
-//       if (blockSize >=   2) { shared_mem[id] += shared_mem[id +  1]; }
-//   }
-
-
-
 
 
 // ---------------- REDUCTION v2-------------------

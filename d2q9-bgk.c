@@ -107,8 +107,6 @@ int main(int argc, char* argv[])
 
   for (int tt = 0; tt < params.maxIters; tt++)
   {
-    // printf("s8 =%f\n", cells->s8[100]);
-
     timestep(params, cells, tmp_cells, obstacles, tt, av_vels, ocl);
     cl_mem temp = ocl.cells;
     ocl.cells = ocl.tmp_cells;
@@ -187,8 +185,6 @@ int accelerate_flow(const t_param params, t_cells* cells, int* obstacles, t_ocl 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.accelerate_flow,
                                1, NULL, global, NULL, 0, NULL, NULL);
   checkError(err, "enqueueing accelerate_flow kernel", __LINE__);
-  // err = clFinish(ocl.queue);
-  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
@@ -221,13 +217,10 @@ int prop_rbd_col(const t_param params, t_cells* cells, t_cells* tmp_cells, int* 
   // Enqueue kernel
   size_t global[2] = {params.nx, params.ny};
   size_t local[2]  = {params.nx, 1};
-   // size_t local[2]  = {1, 1};
 
   err = clEnqueueNDRangeKernel(ocl.queue, ocl.prop_rbd_col,
                                2, NULL, global, local, 0, NULL, NULL);
   checkError(err, "enqueueing prop_rbd_col kernel", __LINE__);
-  // err = clFinish(ocl.queue);
-  // checkError(err, "waiting for accelerate_flow kernel", __LINE__);
 
   return EXIT_SUCCESS;
 }
