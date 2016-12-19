@@ -110,15 +110,15 @@ typedef struct
 
 typedef struct
 {
-  float s0[16384];
-  float s1[16384];
-  float s2[16384];
-  float s3[16384];
-  float s4[16384];
-  float s5[16384];
-  float s6[16384];
-  float s7[16384];
-  float s8[16384];
+  float s0[1048576];
+  float s1[1048576];
+  float s2[1048576];
+  float s3[1048576];
+  float s4[1048576];
+  float s5[1048576];
+  float s6[1048576];
+  float s7[1048576];
+  float s8[1048576];
 
 } t_cells;
 
