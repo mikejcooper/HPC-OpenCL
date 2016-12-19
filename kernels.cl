@@ -209,13 +209,13 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
 
   // reduce_local(av_local_sums, local_id, num_wrk_items);
   
-  barrier(CLK_GLOBAL_MEM_FENCE);
+  barrier(CLK_LOCAL_MEM_FENCE);
 
 // -----------------REDUCTION ----------------------------------------
 
   // #pragma unroll 1
   for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
-    barrier(CLK_GLOBAL_MEM_FENCE);
+      barrier(CLK_LOCAL_MEM_FENCE);
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i];
       }
@@ -242,17 +242,25 @@ kernel void reduce(global float* av_partial_sums,
 
 // -----------------REDUCTION ----------------------------------------
 
-  // #pragma unroll 1
-  for (int i = group_size / 2; i > 0; i >>= 1) {  
-      barrier(CLK_GLOBAL_MEM_FENCE);
-      if (global_id < i){
-          shared_mem[global_id] += shared_mem[global_id + i];
-      }
-  }
+    if (global_id == 0){
+      float total = 0.0f;
+      for (int i=0; i<global_size; i++) {        
+        total += av_partial_sums[i];             
+      }                                     
+      av_vels[tt] = total/tot_cells;    
+    } 
 
-  if (global_id == 0){
-      av_vels[tt] = shared_mem[0]/tot_cells;                               
-  }
+  // #pragma unroll 1
+  // for (int i = group_size / 2; i > 0; i >>= 1) {  
+  //     barrier(CLK_GLOBAL_MEM_FENCE);
+  //     if (global_id < i){
+  //         shared_mem[global_id] += shared_mem[global_id + i];
+  //     }
+  // }
+
+  // if (global_id == 0){
+  //     av_vels[tt] = shared_mem[0]/tot_cells;                               
+  // }
 }
 
 
