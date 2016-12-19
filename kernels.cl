@@ -207,8 +207,6 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
   int group_id       = get_num_groups(0) * get_group_id(1) + get_group_id(0);     // ID of work-group
 
   av_local_sums[local_id] = tot_u;
-
-  // reduce_local(av_local_sums, local_id, num_wrk_items);
   
   barrier(CLK_LOCAL_MEM_FENCE);
 
@@ -236,8 +234,6 @@ kernel void reduce(global float* av_partial_sums,
   int group_size  = get_global_size(0);  // # work-items   == # work-groups           
   int global_id    = get_global_id(0);   // ID of work-item
   shared_mem[global_id] = av_partial_sums[global_id];
-
-  // reduce_local(shared_mem, global_id, group_size);
   
   barrier(CLK_GLOBAL_MEM_FENCE);
 
