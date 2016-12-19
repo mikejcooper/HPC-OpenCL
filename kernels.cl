@@ -182,7 +182,16 @@ kernel void prop_rbd_col(global write_only t_speed* cells,
 
   av_local_sums[local_id] = tot_u;
 
-  reduce_local(av_local_sums, local_id, num_wrk_items);
+  // reduce_local(av_local_sums, local_id, num_wrk_items);
+  barrier(CLK_LOCAL_MEM_FENCE);
+
+  // #pragma unroll 1
+  for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
+      if (local_id < i){
+          av_local_sums[local_id] += av_local_sums[local_id + i];
+      }
+      barrier(CLK_LOCAL_MEM_FENCE);
+  }
 
   if (local_id == 0){
       av_partial_sums[group_id] = av_local_sums[0];                               
@@ -199,12 +208,14 @@ kernel void reduce(global float* av_partial_sums,
   int global_id    = get_global_id(0);   // ID of work-item
   shared_mem[global_id] = av_partial_sums[global_id];
 
-
   reduce_local(shared_mem, global_id, group_size);
+  
+  // barrier(CLK_LOCAL_MEM_FENCE);
+  // barrier(CLK_GLOBAL_MEM_FENCE);
 
   // // #pragma unroll 1
   // for (int i = group_size / 2; i > 0; i >>= 1) {  
-  //     if (id < i){
+  //     if (global_id < i){
   //         shared_mem[global_id] += shared_mem[global_id + i];
   //     }
   //     barrier(CLK_LOCAL_MEM_FENCE);
@@ -234,11 +245,6 @@ void reduce_local(local float* shared_mem, int id, int group_size){
   //     barrier(CLK_LOCAL_MEM_FENCE);
   // }
 
-  //do reduction in shared mem
-  // if (blockSize >= 512) { if (id < 256) { shared_mem[id] += shared_mem[id + 256]; } barrier(CLK_LOCAL_MEM_FENCE); }
-  // if (blockSize >= 256) { if (id < 128) { shared_mem[id] += shared_mem[id + 128]; } barrier(CLK_LOCAL_MEM_FENCE); }
-  // if (blockSize >= 128) { if (id <  64) { shared_mem[id] += shared_mem[id +  64]; } barrier(CLK_LOCAL_MEM_FENCE); }
-    
   // if (id < 32)
   // {
   //     if (blockSize >=  64) { shared_mem[id] += shared_mem[id + 32]; }
