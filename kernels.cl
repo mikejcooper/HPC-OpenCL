@@ -209,7 +209,7 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
 
   // reduce_local(av_local_sums, local_id, num_wrk_items);
   
-  barrier(CLK_LOCAL_MEM_FENCE);
+  barrier(CLK_GLOBAL_MEM_FENCE);
 
 // -----------------REDUCTION ----------------------------------------
 
