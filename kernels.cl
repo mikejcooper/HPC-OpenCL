@@ -215,7 +215,7 @@ kernel void prop_rbd_col(global write_only t_cells* cells,
 
   // #pragma unroll 1
   for (int i = num_wrk_items / 2; i > 0; i >>= 1) {  
-      barrier(CLK_LOCAL_MEM_FENCE);
+    barrier(CLK_GLOBAL_MEM_FENCE);
       if (local_id < i){
           av_local_sums[local_id] += av_local_sums[local_id + i];
       }
