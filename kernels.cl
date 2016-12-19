@@ -208,18 +208,17 @@ kernel void reduce(global float* av_partial_sums,
   int global_id    = get_global_id(0);   // ID of work-item
   shared_mem[global_id] = av_partial_sums[global_id];
 
-  reduce_local(shared_mem, global_id, group_size);
+  // reduce_local(shared_mem, global_id, group_size);
   
-  // barrier(CLK_LOCAL_MEM_FENCE);
-  // barrier(CLK_GLOBAL_MEM_FENCE);
+  barrier(CLK_GLOBAL_MEM_FENCE);
 
-  // // #pragma unroll 1
-  // for (int i = group_size / 2; i > 0; i >>= 1) {  
-  //     if (global_id < i){
-  //         shared_mem[global_id] += shared_mem[global_id + i];
-  //     }
-  //     barrier(CLK_LOCAL_MEM_FENCE);
-  // }
+  // #pragma unroll 1
+  for (int i = group_size / 2; i > 0; i >>= 1) {  
+      if (global_id < i){
+          shared_mem[global_id] += shared_mem[global_id + i];
+      }
+      barrier(CLK_GLOBAL_MEM_FENCE);
+  }
 
   if (global_id == 0){
       av_vels[tt] = shared_mem[0]/tot_cells;                               
