@@ -244,7 +244,7 @@ kernel void reduce(global float* av_partial_sums,
 
     if (global_id == 0){
       float total = 0.0f;
-      for (int i=0; i<global_size; i++) {        
+      for (int i=0; i<group_size; i++) {        
         total += av_partial_sums[i];             
       }                                     
       av_vels[tt] = total/tot_cells;    
